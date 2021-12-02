@@ -66,6 +66,7 @@
 //#define DUMP_DTB
 
 #define USE_SIFIVE_UART
+#define USE_DW_APB_UART
 
 enum {
     SIFIVE_UART_TXFIFO = 0,
@@ -717,6 +718,15 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 
         fdt_end_node(s); /* memory */
 
+        fdt_begin_node(s, "aliases");
+#ifdef USE_SIFIVE_UART
+        fdt_prop_str(s, "serial0", "/soc/uart@54000000");
+#endif
+//#ifdef USE_DW_APB_UART
+        //fdt_prop_str(s, "serial1", "/soc/uart@12002000");
+//#endif
+        fdt_end_node(s);
+
         fdt_begin_node(s, "soc");
         fdt_prop_u32(s, "#address-cells", 2);
         fdt_prop_u32(s, "#size-cells", 2);
@@ -758,9 +768,11 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 
         plic_phandle = cur_phandle++;
         fdt_prop_u32(s, "phandle", plic_phandle);
+        fdt_prop_u32(s, "linux,phandle", plic_phandle);
 
         fdt_end_node(s); /* plic */
 
+#if 1
         for (i = 0; i < m->virtio_count; ++i) {
             fdt_begin_node_num(s, "virtio", VIRTIO_BASE_ADDR + i * VIRTIO_SIZE);
             fdt_prop_str(s, "compatible", "virtio,mmio");
@@ -770,26 +782,58 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
             fdt_prop_tab_u32(s, "interrupts-extended", tab, 2);
             fdt_end_node(s); /* virtio */
         }
+#endif
+
+        /*
+         L0: subsystem_pbus_clock {
+			#clock-cells = <0>;
+			clock-frequency = <100000000>;
+			clock-output-names = "subsystem_pbus_clock";
+			compatible = "fixed-clock";
+		};
+    */
+
+        int clock_phandle = cur_phandle++;
+        fdt_begin_node(s, "system_clock");
+        fdt_prop_u32(s, "#clock-cells", 0);
+        fdt_prop_str(s, "compatible", "fixed-clock");
+        fdt_prop_u32(s, "clock-frequency", 1000000000);
+        fdt_prop_str(s, "clock-output-names", "sysclock");
+        fdt_prop_u32(s, "phandle", clock_phandle);
+        fdt_prop_u32(s, "linux,phandle", clock_phandle);
+        fdt_end_node(s);
+
 
 #ifdef USE_SIFIVE_UART
         // SiFive UART
         fdt_begin_node_num(s, "uart", UART0_BASE_ADDR);
         fdt_prop_str(s, "compatible", "sifive,uart0");
         fdt_prop_tab_u64_2(s, "reg", UART0_BASE_ADDR, UART0_SIZE);
+        fdt_prop_str(s, "reg-names", "control");
+        fdt_prop_u32(s, "interrupt-parent", plic_phandle);
+        fdt_prop_u32(s, "interrupts", 4);
+        fdt_prop_u32(s, "clocks", clock_phandle);
         fdt_end_node(s); /* uart */
 #endif
 
+#ifdef USE_DW_APB_UART
         // Fake Synopsys™ DesignWare™ ABP™ UART (NS16550 compatible)
         fdt_begin_node_num(s, "uart", DW_APB_UART0_BASE_ADDR);
         {
-            fdt_prop_str(s, "compatible", "ns16550");
+            fdt_prop_str(s, "compatible", "ns16550a");
             fdt_prop_tab_u64_2(s, "reg", DW_APB_UART0_BASE_ADDR, DW_APB_UART0_SIZE);
-            fdt_prop_u32(s, "clock-frequency", 3686400);  // Arbitrary, just to stop complaining
+            //fdt_prop_u32(s, "clock-frequency", 0x384000);
+            //fdt_prop_u32(s, "snps,uart-16550-compatible", -1);
+            // fdt_prop_u32(s, "baudclk", 115200);
+            fdt_prop_u32(s, "current-speed", 115200);
             fdt_prop_u32(s, "reg-shift", 2);
             fdt_prop_u32(s, "reg-io-width", 4);
-            // No interrupts?
+            fdt_prop_u32(s, "clocks", clock_phandle);
+            fdt_prop_u32(s, "interrupt-parent", plic_phandle);
+            fdt_prop_u32(s, "interrupts", 90);
         }
         fdt_end_node(s);
+#endif
 
         fb_dev = m->common.fb_dev;
         if (fb_dev) {
@@ -1173,6 +1217,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
         vbus->addr += VIRTIO_SIZE;
         irq_num++;
         s->virtio_count++;
+        // virtio_set_debug(s->common.console_dev, 1);
     }
 
     /* virtio net device */

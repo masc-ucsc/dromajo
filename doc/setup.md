@@ -51,10 +51,21 @@ because it is sensitive with the cross compiler build options and it is easier
 to just build it. The libc library setup is muslc.
 
 ```
-wget https://github.com/buildroot/buildroot/archive/2020.05.1.tar.gz
-tar xvf 2020.05.1.tar.gz
-cp config-buildroot-2020.05.1 buildroot-2020.05.1/.config
-make -j$(nproc) -C buildroot-2020.05.1
+wget https://github.com/buildroot/buildroot/archive/refs/tags/2021.08.tar.gz
+# earlier version: wget https://github.com/buildroot/buildroot/archive/2020.05.1.tar.gz
+tar xvf 2021.08.tar.gz
+mv buildroot-2021.08 buildroot
+cp config-buildroot-2021.08 buildroot/.config
+make -j$(nproc) -C buildroot
+```
+
+If you want to have a script to run something automatically after boot, this is the time. E.g:
+you can copy the roi and S50bench, and then rebuild the rootfs.
+
+```
+riscv64-linux-gnu-gcc -Wall -Os -static roi.c -o buildroot/output/target/sbin/roi
+cp -f S50bench buildroot/output/target/etc/init.d/
+make -j$(nproc) -C buildroot
 ```
 
 ### Get the Linux kernel up and running (~ 3 min)
@@ -62,26 +73,29 @@ make -j$(nproc) -C buildroot-2020.05.1
 Assumption: you have the `riscv64-linux-gnu-` (GlibC) toolchain.
 
 If not and you built the buildroot, you may be able to reuse the buildroot gcc installed by
-adding buildroot-2020.05.1/output/host/bin to your path, and use the
+adding `buildroot/output/host/bin` to your path, and use the
 riscv64-linux-gcc (fix the CROSS_COMPILE to use riscv64-linux- instead of
 riscv64-linux-gnu-)
 
 ```
 export CROSS_COMPILE=riscv64-linux-gnu-
-wget -nc https://git.kernel.org/torvalds/t/linux-5.8-rc4.tar.gz
-tar -xf linux-5.8-rc4.tar.gz
-make -C linux-5.8-rc4 ARCH=riscv defconfig
-make -C linux-5.8-rc4 ARCH=riscv -j16
+wget https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/linux-5.15.tar.gz
+# earlier version: wget -nc https://git.kernel.org/torvalds/t/linux-5.8-rc4.tar.gz
+# or other version froms: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+tar -xf linux-5.15.tar.gz
+mv linux-5.15 linux
+make -C linux ARCH=riscv defconfig
+make -C linux ARCH=riscv -j$(nproc)
 ```
 
 ### OpenSBI (~ 1 min)
 
 ```
 export CROSS_COMPILE=riscv64-linux-gnu-
-git clone https://github.com/riscv/opensbi.git
+git clone https://github.com/riscv-software-src/opensbi.git
 cd opensbi
-git checkout tags/v0.8 -b temp2
-# works too: git checkout 7be75f519f7705367030258c4410d9ff9ea24a6f -b temp
+git checkout tags/v0.9 -b temp2
+# earlier version: git checkout bd355213bfbb209c047e8cc0df56936f6705477f -b temp
 make PLATFORM=generic
 cd ..
 ```
@@ -89,8 +103,8 @@ cd ..
 ### To boot Linux (login:root password:root)
 
 ```
-cp buildroot-2020.05.1/output/images/rootfs.cpio .
-cp linux-5.8-rc4/arch/riscv/boot/Image .
+cp buildroot/output/images/rootfs.cpio .
+cp linux/arch/riscv/boot/Image .
 cp opensbi/build/platform/generic/firmware/fw_jump.bin .
 ../build/dromajo boot.cfg
 ```

@@ -36,7 +36,7 @@ typedef struct DW_apb_uart_state {
 // Fake Synopsys™ DesignWare™ ABP™ UART (the ET UART)
 #define DW_APB_UART0_BASE_ADDR 0x12002000
 #define DW_APB_UART0_SIZE      0x1000
-#define DW_APB_UART0_IRQ       3         // XXX It's ID 3 which I presume is the PLIC source input
+#define DW_APB_UART0_IRQ       8         // XXX It's ID 3 which I presume is the PLIC source input
 #define DW_APB_UART0_FREQ      25000000  // 25 MHz
 #define DW_APB_UART1_BASE_ADDR 0x12007000
 #define DW_APB_UART1_IRQ       15  // XXX It's ID 15 which I presume is the PLIC source input

@@ -125,6 +125,7 @@ static void console_write(void *opaque, const uint8_t *buf, int len) {
 }
 
 static int console_read(void *opaque, uint8_t *buf, int len) {
+
     STDIODevice *s = (STDIODevice *)opaque;
 
     if (len <= 0)

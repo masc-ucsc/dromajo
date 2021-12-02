@@ -136,6 +136,6 @@ struct RISCVMachine {
 #define UART0_BASE_ADDR 0x54000000
 #define UART0_SIZE      32
 #endif
-#define UART0_IRQ 3
+#define UART0_IRQ 6
 
 #endif
