@@ -228,6 +228,10 @@ int main(int argc, char **argv) {
     execution_progress_meassure = &m->cpu_state[0]->minstret;
     signal(SIGINT, sigintr_handler);
 
+    execution_start_ts = get_current_time_in_seconds();
+    execution_progress_meassure = &m->cpu_state[0]->minstret;
+    signal(SIGINT, sigintr_handler);
+
     int keep_going;
     do {
       keep_going = 0;
