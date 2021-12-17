@@ -81,7 +81,9 @@ endif ()
 
 # externak package dependencies
 SET(CMAKE_MODULE_PATH "${dromajo_SOURCE_DIR}/cmake")
-FIND_PACKAGE(LibElf REQUIRED)
+if (${CMAKE_HOST_APPLE})
+    FIND_PACKAGE(LibElf REQUIRED)
+endif ()
 
 # Set Version Header
 set(CONFIG_VERSION "Dromajo-0.1")

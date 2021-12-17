@@ -566,6 +566,17 @@ void handle_rsp_q(const char *buf, const size_t buf_len) {
 // GDB STUB RELATED CODE ENDING HERE
 ////////////////////////////////////
 
+static double execution_start_ts;
+static uint64_t *execution_progress_meassure;
+
+
+static void sigintr_handler(int dummy) {
+    double t = get_current_time_in_seconds();
+    fprintf(dromajo_stderr, "Simulation speed: %5.2f MIPS (single-core)\n",
+            1e-6 * *execution_progress_meassure / (t - execution_start_ts));
+    exit(1);
+}
+
 int main(int argc, char **argv) {
     const char *port_name = NULL;
     int         port_num;
@@ -714,6 +725,10 @@ done:
         return 1;
     }
 
+    execution_start_ts = get_current_time_in_seconds();
+    execution_progress_meassure = &m->cpu_state[0]->minstret;
+    signal(SIGINT, sigintr_handler);
+
     int keep_going;
     do {
       keep_going = 0;
@@ -726,6 +741,8 @@ done:
 #endif
     } while (keep_going);
 
+    double t = get_current_time_in_seconds();
+
     for (int i = 0; i < m->ncpus; ++i) {
       int benchmark_exit_code = riscv_benchmark_exit_code(m->cpu_state[i]);
       if (benchmark_exit_code != 0) {
@@ -733,6 +750,9 @@ done:
         return 1;
       }
     }
+
+    fprintf(dromajo_stderr, "Simulation speed: %5.2f MIPS (single-core)\n",
+            1e-6 * *execution_progress_meassure / (t - execution_start_ts));
 
     fprintf(dromajo_stderr, "\nPower off.\n");
 

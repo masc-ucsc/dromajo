@@ -2170,7 +2170,6 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     uint64_t  n_addr=0;
     uint64_t  n_addr_to_skip=0;
     uint64_t *addr = s->machine->llc->traverse(n_addr);
-
     // reserve 1K * nCPUS for default data + used data
     uint64_t n_bytes_space_left = ROM_SIZE - 1024 * s->machine->ncpus - data_pos * sizeof(*rom);
 
