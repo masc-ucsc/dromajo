@@ -260,6 +260,7 @@ void          virt_machine_end(RISCVMachine *s);
 void          virt_machine_serialize(RISCVMachine *m, const char *dump_name);
 void          virt_machine_deserialize(RISCVMachine *m, const char *dump_name);
 BOOL          virt_machine_run(RISCVMachine *m, int hartid);
+uint64_t      virt_machine_read_u8(RISCVMachine *m, int hartid, uint64_t addr);
 uint64_t      virt_machine_get_pc(RISCVMachine *m, int hartid);
 uint64_t      virt_machine_get_reg(RISCVMachine *m, int hartid, int rn);
 uint64_t      virt_machine_get_fpreg(RISCVMachine *m, int hartid, int rn);

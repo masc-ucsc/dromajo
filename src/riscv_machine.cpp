@@ -1384,6 +1384,8 @@ int virt_machine_get_sleep_duration(RISCVMachine *m, int hartid, int ms_delay) {
     return ms_delay;
 }
 
+uint64_t virt_machine_read_u8(RISCVMachine *s, int hartid, uint64_t addr) { return riscv_read_u8(s->cpu_state[hartid], addr); }
+
 uint64_t virt_machine_get_pc(RISCVMachine *s, int hartid) { return riscv_get_pc(s->cpu_state[hartid]); }
 
 uint64_t virt_machine_get_reg(RISCVMachine *s, int hartid, int rn) { return riscv_get_reg(s->cpu_state[hartid], rn); }

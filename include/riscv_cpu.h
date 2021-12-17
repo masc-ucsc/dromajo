@@ -303,6 +303,7 @@ uint32_t       riscv_cpu_get_misa(RISCVCPUState *s);
 void           riscv_cpu_flush_tlb_write_range_ram(RISCVCPUState *s, uint8_t *ram_ptr, size_t ram_size);
 void           riscv_set_pc(RISCVCPUState *s, uint64_t pc);
 uint64_t       riscv_get_pc(RISCVCPUState *s);
+uint64_t       riscv_read_u8(RISCVCPUState *s, uint64_t pc);
 uint64_t       riscv_get_reg(RISCVCPUState *s, int rn);
 uint64_t       riscv_get_reg_previous(RISCVCPUState *s, int rn);
 uint64_t       riscv_get_fpreg(RISCVCPUState *s, int rn);

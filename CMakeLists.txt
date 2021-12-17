@@ -119,6 +119,7 @@ add_library(dromajo_cosim STATIC
         src/iomem.cpp
         src/dw_apb_uart.cpp
         src/json.cpp
+        src/gdb_stub.cpp
         src/machine.cpp
         src/elf64.cpp
         src/LiveCache.cpp

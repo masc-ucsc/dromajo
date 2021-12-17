@@ -1765,6 +1765,14 @@ void riscv_set_pc(RISCVCPUState *s, uint64_t val) { s->pc = val & (s->misa & MCP
 
 uint64_t riscv_get_pc(RISCVCPUState *s) { return s->pc; }
 
+uint64_t riscv_read_u8(RISCVCPUState *s, uint64_t addr) {
+  uint8_t tmp;
+  if (target_read_u8(s, &tmp, addr))
+    return -1;
+
+  return tmp;
+}
+
 uint64_t riscv_get_reg(RISCVCPUState *s, int rn) {
     assert(0 <= rn && rn < 32);
     return s->reg[rn];
