@@ -28,9 +28,29 @@ find_path (LIBELF_INCLUDE_DIRS
     /usr/local/include/libelf
     /opt/local/include
     /opt/local/include/libelf
+    /opt/homebrew/include
+    /opt/homebrew/include/libelf
     /sw/include
     /sw/include/libelf
     ENV CPATH)
+
+find_path (LIBELF_INCLUDE_DIR2
+  NAMES
+    libelf/libelf.h
+  PATHS
+    /usr/include
+    /usr/include/libelf
+    /usr/local/include
+    /usr/local/include/libelf
+    /opt/local/include
+    /opt/local/include/libelf
+    /opt/homebrew/include
+    /opt/homebrew/include/libelf
+    /sw/include
+    /sw/include/libelf
+    ENV CPATH)
+
+list(APPEND LIBELF_INCLUDE_DIRS ${LIBELF_INCLUDE_DIR2})
 
 find_library (LIBELF_LIBRARIES
   NAMES
@@ -51,9 +71,15 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(LibElf DEFAULT_MSG
   LIBELF_LIBRARIES
   LIBELF_INCLUDE_DIRS)
 
-SET(CMAKE_REQUIRED_LIBRARIES elf)
+SET(CMAKE_REQUIRED_INCLUDES ${LIBELF_INCLUDE_DIRS})
+SET(CMAKE_REQUIRED_LIBRARIES ${LIBELF_LIBRARIES})
 INCLUDE(CheckCXXSourceCompiles)
-CHECK_CXX_SOURCE_COMPILES("#include <libelf.h>
+CHECK_CXX_SOURCE_COMPILES("
+#if defined(__APPLE__)
+#include <gelf.h> /* brew install libelf */
+#else
+#include <elf.h>
+#endif
 int main() {
   Elf *e = (Elf*)0;
   size_t sz;

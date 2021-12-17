@@ -38,7 +38,7 @@
 # THE SOFTWARE.
 #
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.9)
 set(CMAKE_CXX_STANDARD 11)
 project(dromajo)
 option(TRACEOS "TRACEOS" OFF)
@@ -78,6 +78,10 @@ if (SIMPOINT)
             -DSIMPOINT_BB
     )
 endif ()
+
+# externak package dependencies
+SET(CMAKE_MODULE_PATH "${dromajo_SOURCE_DIR}/cmake")
+FIND_PACKAGE(LibElf REQUIRED)
 
 # Set Version Header
 set(CONFIG_VERSION "Dromajo-0.1")
@@ -138,8 +142,9 @@ else ()
 endif ()
 
 if (${CMAKE_HOST_APPLE})
-    include_directories(/usr/local/include /usr/local/include/libelf)
-    target_link_libraries(dromajo_cosim -L/usr/local/lib -lelf)
+    include_directories(${LIBELF_INCLUDE_DIRS})
+    target_link_libraries(dromajo       ${LIBELF_LIBRARIES})
+    target_link_libraries(dromajo_cosim ${LIBELF_LIBRARIES})
 else ()
     # add librt for Linux
     target_link_libraries(dromajo_cosim rt)

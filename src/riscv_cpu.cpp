@@ -1902,6 +1902,8 @@ static void dump_mainram_helper(const void* base, size_t size, bool first, uint6
         //  First time, write entire "mainram" region;
         if(first)
         {
+#if 0
+            // slow 1 byte at a time
             size_t to_go = size;
             while(to_go > 0)
             {
@@ -1911,11 +1913,15 @@ static void dump_mainram_helper(const void* base, size_t size, bool first, uint6
                 mem_ptr++;
                 to_go -= dump_chunk;
             }
+#else
+            const size_t wrote = fwrite(mem_ptr, size, 1, out);
+#endif
         }
         else    //  write parts of the file for other "mainram" regions
         {
             diff = cur_base - ram_base_addr;
             fseek(out, diff, SEEK_SET);
+#if 0
             size_t to_go = size;
             while(to_go > 0)
             {
@@ -1925,6 +1931,9 @@ static void dump_mainram_helper(const void* base, size_t size, bool first, uint6
                 mem_ptr++;
                 to_go -= dump_chunk;
             }
+#else
+            const size_t wrote = fwrite(mem_ptr, size, 1, out);
+#endif
         }
         fclose(out);
     }
@@ -2127,6 +2136,7 @@ static void create_hang_nonzero_hart(uint32_t *rom, uint32_t *code_pos, uint32_t
 }
 
 static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t clint_base_addr) {
+    assert(ROM_SIZE>=(ROM_CODE_SIZE+512)); // minimum of 512bytes per core of data size
     uint32_t rom[ROM_SIZE / 4];
     memset(rom, 0, sizeof rom);
 
@@ -2136,7 +2146,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     // 0B00..0FFF boot data (  512 B)
 
     uint32_t code_pos       = (BOOT_BASE_ADDR - ROM_BASE_ADDR) / sizeof *rom;
-    uint32_t data_pos       = 0xB00 / sizeof *rom;
+    uint32_t data_pos       = ROM_CODE_SIZE/sizeof *rom;
     uint32_t data_pos_start = data_pos;
 
     if (s->machine->ncpus == 1)  // FIXME: May be interesting to freeze hartid >= ncpus
@@ -2161,16 +2171,19 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     uint64_t  n_addr_to_skip=0;
     uint64_t *addr = s->machine->llc->traverse(n_addr);
 
-    if (n_addr > (ROM_SIZE-1024)) {
+    // reserve 1K * nCPUS for default data + used data
+    uint64_t n_bytes_space_left = ROM_SIZE - 1024 * s->machine->ncpus - data_pos * sizeof(*rom);
+
+    if (n_addr >= n_bytes_space_left/8) {
         fprintf(stderr, "LiveCache: truncating boot rom from %" PRIu64 " to %d (you may want to increase ROM_SIZE for better warmup)\n", n_addr, ROM_SIZE-1024);
-        n_addr_to_skip = n_addr - (ROM_SIZE - 1024);
+        n_addr_to_skip = 1 + n_addr - n_bytes_space_left/8;
     }
     uint32_t n_entries = n_addr-n_addr_to_skip;
 
     create_warmup_loop(rom, &code_pos, &data_pos, n_entries);
     for (size_t i = n_addr_to_skip; i < n_addr; ++i) {
         uint64_t a = addr[i] & ~0x1ULL;
-        printf("addr:%llx %s\n", (unsigned long long)a, (addr[i] & 1) ? "ST" : "LD");
+        //printf("addr:%llx %s\n", (unsigned long long)a, (addr[i] & 1) ? "ST" : "LD");
         create_warmup_data(rom, &data_pos, addr[i]);
     }
 #endif
@@ -2275,9 +2288,9 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     if (sizeof rom / sizeof *rom <= data_pos || data_pos_start <= code_pos) {
         fprintf(dromajo_stderr,
                 "ERROR: ROM is too small. ROM_SIZE should increase.  "
-                "Current code_pos=%d data_pos=%d\n",
-                code_pos,
-                data_pos);
+                "Current %dbytes for code and %dbytes for data\n",
+                code_pos*4,
+                (data_pos - data_pos_start)*4);
         exit(-6);
     }
 

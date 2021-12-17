@@ -47,6 +47,7 @@
 typedef struct RISCVCPUState RISCVCPUState;
 
 #define ROM_SIZE       0x00001000
+#define ROM_CODE_SIZE  0x00000B00
 #define ROM_BASE_ADDR  0x00010000
 #define BOOT_BASE_ADDR 0x00010000
 
