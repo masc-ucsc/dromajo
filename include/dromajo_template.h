@@ -290,17 +290,33 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
         /* Handled any breakpoint triggers in order (note, we
          * precompute the mask and pattern to lower some of the
          * cost). */
-        target_ulong t_mctl  = MCONTROL_EXECUTE | (MCONTROL_U << s->priv);
-        target_ulong t_mask  = ((target_ulong)0xF << 60) | t_mctl;
-        target_ulong t_match = ((target_ulong)0x2 << 60) | t_mctl;
+        target_ulong t_mctl = MCONTROL_EXECUTE | (MCONTROL_U << s->priv);
 
         for (int i = 0; i < MAX_TRIGGERS; ++i)
-            if ((s->tdata1[i] & t_mask) != t_match && s->tdata2[i] == s->pc) {
-                --insn_counter_addend;
-                s->pending_exception = CAUSE_BREAKPOINT;
-                s->pending_tval      = 0;
-                raise_exception2(s, s->pending_exception, s->pending_tval);
-                goto done_interp;
+            if ((s->tdata1[i] & t_mctl) == t_mctl) {
+                target_ulong t_match = (s->tdata1[i] & MCONTROL_MATCH) >> 7;
+                // Matches when the top M bits of the value
+                // match the top M bits of tdata2. M is XLEN-1
+                // minus the index of the least-significant bit
+                // containing 0 in tdata2.
+                target_ulong napot_mask = ~(s->tdata2[i] + 1 ^ s->tdata2[i]);
+                target_ulong napot_pc = napot_mask & s->pc;
+                target_ulong napot_tdata2 = napot_mask & s->tdata2[i];
+                if (t_match == MCONTROL_MATCH_EQUAL && s->pc == s->tdata2[i]
+                    || t_match == MCONTROL_MATCH_NAPOT && napot_pc == napot_tdata2
+                    || t_match == MCONTROL_MATCH_GE && s->pc >= s->tdata2[i]
+                    || t_match == MCONTROL_MATCH_LT && s->pc < s->tdata2[i]) {
+                    if (s->tdata1[i] & MCONTROL_ACTION && s->tdata1[i] & MCONTROL_DMODE) {
+                        /* Only m control action mode debug mode is implemented */
+                        riscv_set_debug_mode(s, true);
+                        s->pc = 0x0800;
+                        // TO-DO: implement debug mode
+                        goto done_interp;
+                    }
+                    s->pending_exception = CAUSE_BREAKPOINT;
+                    s->pending_tval      = 0;
+                    goto exception;
+                }
             }
 
         if (unlikely(code_ptr >= code_end)) {
@@ -1117,10 +1133,10 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
                             s->mcycle += delta;
                             s->minstret += delta;
                         }
-                        if (csr_read(s, &val2, imm, TRUE))
+                        if (csr_read(s, funct3, &val2, imm, TRUE))
                             goto illegal_insn;
                         val2 = (intx_t)val2;
-                        err  = csr_write(s, imm, val);
+                        err  = csr_write(s, funct3, imm, val);
                         if (err == -2)
                             goto mmu_exception;
                         if (err < 0)
@@ -1145,7 +1161,7 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
                             s->mcycle += delta;
                             s->minstret += delta;
                         }
-                        if (csr_read(s, &val2, imm, (rs1 != 0)))
+                        if (csr_read(s, funct3, &val2, imm, (rs1 != 0)))
                             goto illegal_insn;
                         val2 = (intx_t)val2;
                         if (rs1 != 0) {
@@ -1153,7 +1169,7 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
                                 val = val2 | val;
                             else
                                 val = val2 & ~val;
-                            err = csr_write(s, imm, val);
+                            err = csr_write(s, funct3, imm, val);
                             if (err == -2)
                                 goto mmu_exception;
                             if (err < 0)
@@ -1275,12 +1291,10 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
                 funct3 = (insn >> 12) & 7;
                 switch (funct3) {
                     case 0: /* fence */
-                        if (insn & 0xf00fff80)
-                            goto illegal_insn;
+                        /* all variantions are reserved for future use */
                         break;
                     case 1: /* fence.i */
-                        if (insn != 0x0000100f)
-                            goto illegal_insn;
+                        /* all variantions are reserved for future use */
                         break;
 #if XLEN >= 128
                     case 2: /* lq */
@@ -1649,8 +1663,7 @@ mmu_exception:
 exception:
     s->pc = GET_PC();
     if (s->pending_exception >= 0) {
-        if ((s->pending_exception < CAUSE_USER_ECALL || s->pending_exception > CAUSE_USER_ECALL + 3)
-            && s->pending_exception != CAUSE_BREAKPOINT) {
+        if (s->pending_exception < CAUSE_USER_ECALL || s->pending_exception > CAUSE_USER_ECALL + 3) {
             /* All other causes cancelled the instruction and shouldn't be
              * counted in minstret */
             --insn_counter_addend;

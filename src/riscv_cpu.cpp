@@ -823,7 +823,7 @@ static BOOL counter_access_ok(RISCVCPUState *s, uint32_t csr) {
 
 /* return -1 if invalid CSR. 0 if OK. 'will_write' indicate that the
    csr will be written after (used for CSR access check) */
-static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr, BOOL will_write) {
+static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint32_t csr, BOOL will_write) {
     target_ulong val;
 
     if (((csr & 0xc00) == 0xc00) && will_write)
@@ -890,10 +890,6 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr, BOOL wil
 
         case 0x7a2:  // tdata2
             val = s->tdata2[s->tselect];
-            break;
-
-        case 0x7a3:  // tdata3
-            val = s->tdata3[s->tselect];
             break;
 
         case 0x7b0:
@@ -1050,7 +1046,7 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr, BOOL wil
         default:
         invalid_csr:
             if (s->machine->hooks.csr_read)
-                return s->machine->hooks.csr_read(s, csr, pval);
+                return s->machine->hooks.csr_read(s, funct3, csr, pval);
 
 #ifdef DUMP_INVALID_CSR
             /* the 'time' counter is usually emulated */
@@ -1115,7 +1111,7 @@ static void unpack_pmpaddrs(RISCVCPUState *s) {
                 int j;
                 // Count trailing ones
                 for (j = 0; j < 64; ++j)
-                    if ((s->csr_pmpaddr[i] & (1 << j)) == 0)
+                    if ((s->csr_pmpaddr[i] & (1llu << j)) == 0)
                         break;
                 j += 3;  // 8-byte is the lowest option
                 // NB, meaningless when i >= 56!
@@ -1140,7 +1136,7 @@ static void unpack_pmpaddrs(RISCVCPUState *s) {
 
 /* return -1 if invalid CSR, 0 if OK, -2 if CSR raised an exception,
  * 2 if TLBs have been flushed. */
-static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
+static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulong val) {
     target_ulong mask;
 
 #if defined(DUMP_CSR)
@@ -1241,24 +1237,27 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
             s->tselect = val % MAX_TRIGGERS;
             break;
 
-        case 0x7a1:  // tdata1
+        case 0x7a1: { // tdata1
             // Only support No Trigger and MControl
-            {
-                int type = val >> 60;
-                if (type != 0 && type != 2)
-                    break;
-                // SW can write type and mcontrol bits M and EXECUTE
-                mask                  = ((target_ulong)15 << 60) | MCONTROL_M | MCONTROL_EXECUTE;
+            // SW can write type and mcontrol bits M and EXECUTE
+            // mask 0010 0 000100 0....0 0011 1011 111 ==
+            //      m | s | u | execute | store | load
+            // type = 4d'2 maskmax = 4 (= 16 B?)
+            if (!(s->tdata1[s->tselect] & MCONTROL_DMODE) || s->debug_mode) {
+                /* When D-mode bit set, cannot write outside of debug */
+                mask = 0x20800000000011dfULL;
+                val |= 0x2080000000000000ULL;
+                /* D-mode bit can only be set in debug  */
+                if (s->debug_mode)
+                    mask += 0x800000000000000ULL;
                 s->tdata1[s->tselect] = s->tdata1[s->tselect] & ~mask | val & mask;
             }
             break;
+        }
 
         case 0x7a2:  // tdata2
-            s->tdata2[s->tselect] = val;
-            break;
-
-        case 0x7a3:  // tdata3
-            s->tdata3[s->tselect] = val;
+            if (!(s->tdata1[s->tselect] & MCONTROL_DMODE) || s->debug_mode)
+                s->tdata2[s->tselect] = val;
             break;
 
         case 0x7b0:
@@ -1353,8 +1352,18 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
         case CSR_PMPADDR(12):
         case CSR_PMPADDR(13):
         case CSR_PMPADDR(14):
-        case CSR_PMPADDR(15):
+        case CSR_PMPADDR(15): {
             if (PMP_N <= csr - CSR_PMPADDR(0))
+                break;
+            uint64_t cfg = s->csr_pmpcfg[(csr - CSR_PMPADDR(0))/8];
+            cfg = cfg >> (csr - CSR_PMPADDR(0)) * 8;
+
+            if (cfg & PMPCFG_L) // pmpcfg entry is locked
+                break;
+
+            // Check if next pmpcfg(i+1) is set to TOR, writes to pmpaddr(i) are ignored
+            cfg = (cfg >> 8);
+            if(((cfg & PMPCFG_A_MASK) == PMPCFG_A_TOR) && (cfg & PMPCFG_L))
                 break;
 
             // Note, due to TOR ranges, one PMPADDR can affect two entries
@@ -1362,6 +1371,7 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
             s->csr_pmpaddr[csr - CSR_PMPADDR(0)] = val & PMPADDR_MASK;
             unpack_pmpaddrs(s);
             break;
+        }
 
         case 0xb00: /* mcycle */ s->mcycle = val; break;
         case 0xb02: /* minstret */ s->minstret = val; break;
@@ -1422,7 +1432,7 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val) {
 
         default:
             if (s->machine->hooks.csr_write)
-                return s->machine->hooks.csr_write(s, csr, val);
+                return s->machine->hooks.csr_write(s, funct3, csr, val);
 
         invalid_csr:
 #ifdef DUMP_INVALID_CSR
@@ -1651,9 +1661,8 @@ static int __must_use_result raise_interrupt(RISCVCPUState *s) {
 static inline int32_t sext(int32_t val, int n) { return (val << (32 - n)) >> (32 - n); }
 
 static inline uint32_t get_field1(uint32_t val, int src_pos, int dst_pos, int dst_pos_max) {
-    int mask;
     assert(dst_pos_max >= dst_pos);
-    mask = ((1 << (dst_pos_max - dst_pos + 1)) - 1) << dst_pos;
+    uint32_t mask = ((1 << (dst_pos_max - dst_pos + 1)) - 1) << dst_pos;
     if (dst_pos >= src_pos)
         return (val << (dst_pos - src_pos)) & mask;
     else
@@ -1749,9 +1758,11 @@ RISCVCPUState *riscv_cpu_init(RISCVMachine *machine, int hartid) {
 
     s->tselect = 0;
     for (int i = 0; i < MAX_TRIGGERS; ++i) {
-        s->tdata1[i] = 2l << 60;
+        s->tdata1[i] = MCONTROL_TYPE_AD_MATCH | MCONTROL_MAXMASK_4;
         s->tdata2[i] = ~(target_ulong)0;
     }
+
+    s->dcsr = (1 << 30) + 3;
 
     tlb_init(s);
 
@@ -2127,7 +2138,6 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a0, s->tselect);  // tselect
     // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a1, s->tdata1); // tdata1
     // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a2, s->tdata2); // tdata2
-    // FIXME: create_csr64_recovery(rom, &code_pos, &data_pos, 0x7a3, s->tdata3); // tdata3
 
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x302, s->medeleg);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x303, s->mideleg);
