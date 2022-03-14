@@ -160,9 +160,9 @@ int iterate_core(RISCVMachine *m, int hartid) {
     return keep_going;
 }
 
-
 static double execution_start_ts;
 static uint64_t *execution_progress_meassure;
+
 
 static void sigintr_handler(int dummy) {
     double t = get_current_time_in_seconds();
@@ -223,10 +223,6 @@ int main(int argc, char **argv) {
         }
     }
 #endif
-
-    execution_start_ts = get_current_time_in_seconds();
-    execution_progress_meassure = &m->cpu_state[0]->minstret;
-    signal(SIGINT, sigintr_handler);
 
     execution_start_ts = get_current_time_in_seconds();
     execution_progress_meassure = &m->cpu_state[0]->minstret;
