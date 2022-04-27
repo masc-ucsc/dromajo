@@ -104,6 +104,7 @@ void LiveCache::read(uint64_t addr) {
         return;
     }
     nReadMiss++;
+    //printf("readMiss addr:%llx\n",(addr>>6)<<6);
 
     l        = cacheBank->fillLine(addr);
     l->st    = false;

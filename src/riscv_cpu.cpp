@@ -165,7 +165,7 @@ static inline uint64_t track_dread(RISCVCPUState *s, uint64_t vaddr, uint64_t pa
     s->machine->llc->read(paddr);
 #endif
     s->last_data_paddr = paddr;
-    //printf("track.ld[%llx:%llx]=%llx\n", paddr, paddr+size-1, data);
+    //fprintf(stderr,"track.ld[%llx:%llx]=%llx vaddr=%llx\n", paddr, paddr+size-1, data, vaddr);
 
     return data;
 }
@@ -244,7 +244,6 @@ static inline PhysMemoryRange *get_phys_mem_range_pmp(RISCVCPUState *s, uint64_t
             return 0;                                                                                \
         }                                                                                            \
         uint_type pval = *(uint_type *)(pr->phys_mem + (uintptr_t)(paddr - pr->addr));               \
-        pval           = track_dread(s, paddr, paddr, pval, size);                                   \
         *fail          = false;                                                                      \
         return pval;                                                                                 \
     }
@@ -1893,8 +1892,8 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
 
     size_t sz = read(f_fd, base, size);
 
-    if (sz != size)
-        err(-3, "%s %zd size does not match memory size %zd", file, sz, size);
+    if (sz <0 || sz > size)
+        err(-3, "%s %zd size does not fit in memory size %zd", file, sz, size);
 
     close(f_fd);
 }
