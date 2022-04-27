@@ -214,19 +214,63 @@ bool riscv_cpu_pmp_access_ok(RISCVCPUState *s, uint64_t paddr, size_t size, pmpc
 
     return priv == PRV_M;
 }
-
-static inline PhysMemoryRange *get_phys_mem_range_pmp(RISCVCPUState *s, uint64_t paddr, size_t size, pmpcfg_t perm) {
-    if (!riscv_cpu_pmp_access_ok(s, paddr, size, perm))
+// Returns PhysMemoryRange, NULL address or otherwise, if access isn't
+// considered pmp blocked, sets fail to false - otherwise NULL address
+// is returned no matter the mapping of the requested address
+// and fail is set to true
+static inline PhysMemoryRange *get_phys_mem_range_pmp(RISCVCPUState *s, uint64_t paddr, size_t size, pmpcfg_t perm, bool *fail) {
+    *fail = false;
+    if (!riscv_cpu_pmp_access_ok(s, paddr, size, perm)) {
+        *fail = true;
         return NULL;
+    }
     else
         return get_phys_mem_range(s->mem_map, paddr);
+}
+
+static inline bool check_triggers(RISCVCPUState *s, target_ulong t_mctl, target_ulong addr) {
+    if (s->debug_mode) //Triggers do not fire while in Debug Mode.
+        return false;
+
+    /* Handled any breakpoint triggers in order (note, we
+     * precompute the mask and pattern to lower some of the
+     * cost). */
+    t_mctl |= MCONTROL_U << s->priv;
+
+    for (int i = 0; i < MAX_TRIGGERS; ++i)
+        if ((s->tdata1[i] & t_mctl) == t_mctl) {
+            target_ulong t_match = (s->tdata1[i] & MCONTROL_MATCH) >> 7;
+            // Matches when the top M bits of the value
+            // match the top M bits of tdata2. M is XLEN-1
+            // minus the index of the least-significant bit
+            // containing 0 in tdata2.
+            target_ulong napot_mask = ~(s->tdata2[i] + 1 ^ s->tdata2[i]);
+            target_ulong napot_addr = napot_mask & addr;
+            target_ulong napot_tdata2 = napot_mask & s->tdata2[i];
+            if (t_match == MCONTROL_MATCH_EQUAL && addr == s->tdata2[i]
+                || t_match == MCONTROL_MATCH_NAPOT && napot_addr == napot_tdata2
+                || t_match == MCONTROL_MATCH_GE && addr >= s->tdata2[i]
+                || t_match == MCONTROL_MATCH_LT && addr < s->tdata2[i]) {
+                if (s->tdata2[i] & MCONTROL_ACTION && s->tdata1[i] & MCONTROL_DMODE) {
+                    /* Only m control action mode debug mode is implemented */
+                    riscv_set_debug_mode(s, true);
+                    /* TO-DO: implement debug-mode */
+                    s->pc = 0x0800;
+                    return true;
+                }
+                s->pending_exception = CAUSE_BREAKPOINT;
+                s->pending_tval      = addr;
+                return true;
+            }
+        }
+    return false;
 }
 
 /* addr must be aligned. Only RAM accesses are supported */
 #define PHYS_MEM_READ_WRITE(size, uint_type)                                                         \
     void riscv_phys_write_u##size(RISCVCPUState *s, target_ulong paddr, uint_type val, bool *fail) { \
-        PhysMemoryRange *pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_W);                  \
-        if (!pr || !pr->is_ram) {                                                                    \
+        PhysMemoryRange *pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_W, fail);           \
+        if (!pr || *fail || !pr->is_ram) {                                                     \
             *fail = true;                                                                            \
             return;                                                                                  \
         }                                                                                            \
@@ -236,8 +280,8 @@ static inline PhysMemoryRange *get_phys_mem_range_pmp(RISCVCPUState *s, uint64_t
     }                                                                                                \
                                                                                                      \
     uint_type riscv_phys_read_u##size(RISCVCPUState *s, target_ulong paddr, bool *fail) {            \
-        PhysMemoryRange *pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_R);                  \
-        if (!pr) {                                                                                   \
+        PhysMemoryRange *pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_R, fail);           \
+        if (!pr || *fail) {                                                                    \
             *fail = true;                                                                            \
             return 0;                                                                                \
         }                                                                                            \
@@ -254,6 +298,8 @@ PHYS_MEM_READ_WRITE(64, uint64_t)
 /* return 0 if OK, != 0 if exception */
 #define TARGET_READ_WRITE(size, uint_type, size_log2)                                                                       \
     static inline __must_use_result int target_read_u##size(RISCVCPUState *s, uint_type *pval, target_ulong addr) {         \
+        if (check_triggers(s, MCONTROL_LOAD, addr))                                                                         \
+            return -1;                                                                                                      \
         uint32_t tlb_idx;                                                                                                   \
         if (!CONFIG_ALLOW_MISALIGNED_ACCESS && (addr & (size / 8 - 1)) != 0) {                                              \
             s->pending_tval      = addr;                                                                                    \
@@ -277,6 +323,8 @@ PHYS_MEM_READ_WRITE(64, uint64_t)
     }                                                                                                                       \
                                                                                                                             \
     static inline __must_use_result int target_write_u##size(RISCVCPUState *s, target_ulong addr, uint_type val) {          \
+        if (check_triggers(s, MCONTROL_STORE, addr))                                                                        \
+            return -1;                                                                                                      \
         uint32_t tlb_idx;                                                                                                   \
         if (!CONFIG_ALLOW_MISALIGNED_ACCESS && (addr & (size / 8 - 1)) != 0) {                                              \
             s->pending_tval      = addr;                                                                                    \
@@ -436,6 +484,7 @@ no_inline int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_u
     uint8_t *        ptr;
     PhysMemoryRange *pr;
     mem_uint_t       ret;
+    bool             pmp_blocked = false;
 
     /* first handle unaligned accesses */
     size = 1 << size_log2;
@@ -506,8 +555,8 @@ no_inline int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_u
             s->pending_exception = err == -1 ? CAUSE_LOAD_PAGE_FAULT : CAUSE_FAULT_LOAD;
             return -1;
         }
-        pr = get_phys_mem_range_pmp(s, paddr, size, PMPCFG_R);
-        if (!pr) {
+        pr = get_phys_mem_range_pmp(s, paddr, size, PMPCFG_R, &pmp_blocked);
+        if (pmp_blocked) {
 #ifdef DUMP_INVALID_MEM_ACCESS
             fprintf(dromajo_stderr, "riscv_cpu_read_memory: invalid physical address 0x");
             print_target_ulong(paddr);
@@ -515,8 +564,11 @@ no_inline int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_u
 #endif
             s->pending_tval      = addr;
             s->pending_exception = CAUSE_FAULT_LOAD;
-            return -1;
+            return -1; // Invalid pmp access
         }
+
+        if (!pr)
+            return 0;  // Isn't RAM or Virt Device, treated as mmio and memory copied from DUT
 
         if (pr->is_ram) {
             tlb_idx                    = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
@@ -572,6 +624,7 @@ no_inline int riscv_cpu_write_memory(RISCVCPUState *s, target_ulong addr, mem_ui
     target_ulong     paddr, offset;
     uint8_t *        ptr;
     PhysMemoryRange *pr;
+    bool             pmp_blocked = false;
 
     /* first handle unaligned accesses */
     size = 1 << size_log2;
@@ -594,16 +647,14 @@ no_inline int riscv_cpu_write_memory(RISCVCPUState *s, target_ulong addr, mem_ui
             s->pending_exception = err == -1 ? CAUSE_STORE_PAGE_FAULT : CAUSE_FAULT_STORE;
             return -1;
         }
-        pr = get_phys_mem_range_pmp(s, paddr, size, PMPCFG_W);
-        if (!pr) {
-#ifdef DUMP_INVALID_MEM_ACCESS
-            fprintf(dromajo_stderr, "riscv_cpu_write_memory: invalid physical address 0x");
-            print_target_ulong(paddr);
-            fprintf(dromajo_stderr, "\n");
-#endif
+        pr = get_phys_mem_range_pmp(s, paddr, size, PMPCFG_W, &pmp_blocked);
+        if(pmp_blocked) {
             s->pending_tval      = addr;
             s->pending_exception = CAUSE_FAULT_STORE;
             return -1;
+        }
+        else if (!pr) {
+            // Isn't RAM or Virt Device, treated as mmio and reads copy DUT data
         } else if (pr->is_ram) {
             phys_mem_set_dirty_bit(pr, paddr - pr->addr);
             tlb_idx                     = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
@@ -665,6 +716,7 @@ static no_inline __must_use_result int target_read_insn_slow(RISCVCPUState *s, u
     target_ulong     paddr;
     uint8_t *        ptr;
     PhysMemoryRange *pr;
+    bool             pmp_blocked = false;
 
     int err = riscv_cpu_get_phys_addr(s, addr, ACCESS_CODE, &paddr);
     if (err) {
@@ -672,8 +724,8 @@ static no_inline __must_use_result int target_read_insn_slow(RISCVCPUState *s, u
         s->pending_exception = err == -1 ? CAUSE_FETCH_PAGE_FAULT : CAUSE_FAULT_FETCH;
         return -1;
     }
-    pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_X);
-    if (!pr || !pr->is_ram) {
+    pr = get_phys_mem_range_pmp(s, paddr, size / 8, PMPCFG_X, &pmp_blocked);
+    if (!pr || pmp_blocked || !pr->is_ram) {
         /* We only allow execution from RAM */
         s->pending_tval      = addr;
         s->pending_exception = CAUSE_FAULT_FETCH;
@@ -700,8 +752,8 @@ static no_inline __must_use_result int target_read_insn_slow(RISCVCPUState *s, u
             return -1;
         }
 
-        PhysMemoryRange *pr_cross = get_phys_mem_range_pmp(s, paddr_cross, 2, PMPCFG_X);
-        if (!pr_cross || !pr_cross->is_ram) {
+        PhysMemoryRange *pr_cross = get_phys_mem_range_pmp(s, paddr_cross, 2, PMPCFG_X, &pmp_blocked);
+        if (!pr_cross || pmp_blocked || !pr_cross->is_ram) {
             /* We only allow execution from RAM */
             s->pending_tval      = addr;
             s->pending_exception = CAUSE_FAULT_FETCH;
@@ -830,6 +882,10 @@ static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint3
         return -1; /* read-only CSR */
     if (s->priv < ((csr >> 8) & 3))
         return -1; /* not enough priviledge */
+
+    if (s->machine->hooks.csr_read)
+        if (!s->machine->hooks.csr_read(s, funct3, csr, pval))
+            return 0;
 
     switch (csr) {
 #if FLEN > 0
@@ -1045,8 +1101,6 @@ static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint3
 
         default:
         invalid_csr:
-            if (s->machine->hooks.csr_read)
-                return s->machine->hooks.csr_read(s, funct3, csr, pval);
 
 #ifdef DUMP_INVALID_CSR
             /* the 'time' counter is usually emulated */
@@ -1144,6 +1198,11 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
     print_target_ulong(val);
     fprintf(dromajo_stderr, "\n");
 #endif
+
+    if (s->machine->hooks.csr_write)
+        if (!s->machine->hooks.csr_write(s, funct3, csr, val))
+            return 0;
+
     switch (csr) {
 #if FLEN > 0
         case 0x001: /* fflags */
@@ -1431,8 +1490,6 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
 #endif
 
         default:
-            if (s->machine->hooks.csr_write)
-                return s->machine->hooks.csr_write(s, funct3, csr, val);
 
         invalid_csr:
 #ifdef DUMP_INVALID_CSR
@@ -1486,7 +1543,7 @@ static void raise_exception2(RISCVCPUState *s, uint64_t cause, target_ulong tval
                 s->priv,
                 cause_s[cause],
                 (uintmax_t)s->pc);
-        fprintf(dromajo_stderr, "hartid=%d0           tval 0x%016jx\n", (int)s->mhartid, (uintmax_t)tval);
+        fprintf(dromajo_stderr, "hartid=%d            tval 0x%016jx\n", (int)s->mhartid, (uintmax_t)tval);
     } else {
         fprintf(dromajo_stderr, "hartid=%d: exception %d, epc 0x%016jx\n", (int)s->mhartid, (int)cause, (uintmax_t)s->pc);
         fprintf(dromajo_stderr, "hartid=%d:           tval 0x%016jx\n", (int)s->mhartid, (uintmax_t)tval);
@@ -1904,9 +1961,12 @@ static uint32_t create_auipc(int rd, uint32_t addr) {
     return 0x17 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
 }
 
-static uint32_t create_lui(int rd, uint32_t addr) {
-    return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
-}
+/*
+ * Might use it one day, but GCC doesn't like unused static functions
+ * static uint32_t create_lui(int rd, uint32_t addr) {
+ *     return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
+ * }
+ */
 
 static uint32_t create_addi(int rd, uint32_t addr) {
     uint32_t pos = addr & 0xFFF;
@@ -1959,39 +2019,39 @@ static void create_warmup_loop(uint32_t *rom, uint32_t *code_pos, uint32_t *data
     rom[(*code_pos)++] = create_lui(11, warmup_size);
     rom[(*code_pos)++] = create_addi(11, warmup_size);
 
-//   2:	fff5869b          	addiw	a3,a1,-1
+//   2: fff5869b                addiw   a3,a1,-1
     rom[(*code_pos)++] = 0xfff5869b;
-//   6:	1682                slli	a3,a3,0x20
-//   8:	82f5                srli	a3,a3,0x1d
+//   6: 1682                slli        a3,a3,0x20
+//   8: 82f5                srli        a3,a3,0x1d
     rom[(*code_pos)++] = 0x82f51682;
-//   a:	00850793          	addi	a5,a0,8
+//   a: 00850793                addi    a5,a0,8
     rom[(*code_pos)++] = 0x00850793;
-//   e:	96be                add	a3,a3,a5
-//  10:	4581                li	a1,0
+//   e: 96be                add a3,a3,a5
+//  10: 4581                li  a1,0
     rom[(*code_pos)++] = 0x458196be;
-//  12:	a039                j	20 <.L5>
+//  12: a039                j   20 <.L5>
 //
-//  14:	2701                addiw	a4,a4,1 // FIXED to a4,a4,0
+//  14: 2701                addiw       a4,a4,1 // FIXED to a4,a4,0
     rom[(*code_pos)++] = 0x2701a039;
-//  16:	00e78023          	sb	a4,0(a5)
+//  16: 00e78023                sb      a4,0(a5)
     rom[(*code_pos)++] = 0x00e78023;
-//  1a:	0521                addi	a0,a0,8
-//  1c:	00d50c63          	beq	a0,a3,34 <.L9>
+//  1a: 0521                addi        a0,a0,8
+//  1c: 00d50c63                beq     a0,a3,34 <.L9>
     rom[(*code_pos)++] = 0x0c630521;
 //
-//  20:	611c                ld	a5,0(a0)
+//  20: 611c                ld  a5,0(a0)
     rom[(*code_pos)++] = 0x611c00d5;
-//  22:	0017f613          	andi	a2,a5,1
+//  22: 0017f613                andi    a2,a5,1
     rom[(*code_pos)++] = 0x0017f613;
-//  26:	0007c703          	lbu	a4,0(a5)
+//  26: 0007c703                lbu     a4,0(a5)
     rom[(*code_pos)++] = 0x0007c703;
-//  2a:	f66d                bnez	a2,14 <.L10>
-//  2c:	0521                addi	a0,a0,8
+//  2a: f66d                bnez        a2,14 <.L10>
+//  2c: 0521                addi        a0,a0,8
     rom[(*code_pos)++] = 0x0521f66d;
-//  2e:	9db9                addw	a1,a1,a4
-//  30:	fed518e3          	bne	a0,a3,20 <.L5>
+//  2e: 9db9                addw        a1,a1,a4
+//  30: fed518e3                bne     a0,a3,20 <.L5>
     rom[(*code_pos)++] = 0x18e39db9;
-//  34:	4501                li	a0,0 // A 2 byte NOP to have 4 bytes alignment
+//  34: 4501                li  a0,0 // A 2 byte NOP to have 4 bytes alignment
     rom[(*code_pos)++] = 0x4501fed5;
 
 }

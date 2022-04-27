@@ -130,16 +130,6 @@ static void uart_update_irq(SiFiveUARTState *s) {
     }
 }
 
-static uint32_t mmio_read(void *opaque, uint32_t offset, int size_log2) {
-    vm_error("mmio_read: offset=%x size_log2=%d\n", offset, size_log2);
-
-    return 0;
-}
-
-static void mmio_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {
-    vm_error("mmio_write: offset=%x size_log2=%d val=%x\n", offset, size_log2, val);
-}
-
 static uint32_t uart_read(void *opaque, uint32_t offset, int size_log2) {
     SiFiveUARTState *s = (SiFiveUARTState *)opaque;
 
@@ -838,46 +828,32 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
         fdt_end_node(s); /* / */
 
         size = fdt_output(s, dst);
+        fdt_end(s);
     } else {
-        // write from other dts
-        FILE *        fPtr;
-        unsigned long fLen;
+        FILE *f = fopen(dtb_name, "rb");
+        fseek(f, 0, SEEK_END);
+        size = ftell(f);
+        rewind(f);
 
-        fPtr = fopen(dtb_name, "rb");  // Open the file in binary mode
-        fseek(fPtr, 0, SEEK_END);      // Jump to the end of the file
-        fLen = ftell(fPtr);            // Get the current byte offset in the file
-        rewind(fPtr);                  // Jump back to the beginning of the file
-
-        size_t result = fread((char *)dst, sizeof(uint8_t), fLen, fPtr);  // Read in the entire file
-        if (result != fLen) {
-            vm_error("DROMAJO failed reading the dts string\n");
+        if (fread((char *)dst, 1, size, f) != (size_t)size) {
+            vm_error("dromajo: %s: %s\n", dtb_name, strerror(errno));
             return -1;
         }
 
-        // DEBUG
-        // for (unsigned long i = 0; i < fLen; ++i)
-        //    printf("[DEBUG][%p][%ld/%ld] == 0x%x\n", &dst[i], i, fLen, dst[i]);
-        // printf("[DEBUG] Done printing\n");
-
-        fclose(fPtr);  // Close the file
-
-        size = fLen;
+        fclose(f);
     }
 
 #ifdef DUMP_DTB
     {
         FILE *f = fopen("dromajo.dtb", "wb");
-        if (f == nullptr) {
-            vm_error("DROMAJO failed to open dromajo.dtb dump file (disable DUMP_DTB?)\n");
+        if (!f) {
+            vm_error("dromajo: %s: %s\n", "dromajo.dtb", strerror(errno));
             return -1;
         }
         fwrite(dst, 1, size, f);
         fclose(f);
     }
 #endif
-
-    if (!dtb_name)
-        fdt_end(s);
 
     return size;
 }
@@ -1127,30 +1103,11 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     }
 
     /* RAM */
-    cpu_register_ram(s->mem_map, 0, 4096, 0);  // Have memory at 0 for uaccess-etcsr to pass
     cpu_register_ram(s->mem_map, s->ram_base_addr, s->ram_size, 0);
     cpu_register_ram(s->mem_map, ROM_BASE_ADDR, ROM_SIZE, 0);
 
     for (int i = 0; i < s->ncpus; ++i) {
         s->cpu_state[i]->physical_addr_len = p->physical_addr_len;
-    }
-
-    if (p->mmio_start) {
-        uint64_t sz = p->mmio_end - p->mmio_start;
-        cpu_register_device(s->mem_map, p->mmio_start, sz, 0, mmio_read, mmio_write, DEVIO_SIZE32 | DEVIO_SIZE16 | DEVIO_SIZE8);
-    }
-
-    if (p->mmio_addrset_size > 0) {
-        for (size_t i = 0; i < p->mmio_addrset_size; ++i) {
-            uint64_t sz = p->mmio_addrset[i].size;
-            cpu_register_device(s->mem_map,
-                                p->mmio_addrset[i].start,
-                                sz,
-                                0,
-                                mmio_read,
-                                mmio_write,
-                                DEVIO_SIZE32 | DEVIO_SIZE16 | DEVIO_SIZE8);
-        }
     }
 
     SiFiveUARTState *uart = (SiFiveUARTState *)calloc(sizeof *uart, 1);
@@ -1266,12 +1223,6 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
                            p->cmdline))
         return NULL;
 
-    /* mmio setup for cosim */
-    s->mmio_start        = p->mmio_start;
-    s->mmio_end          = p->mmio_end;
-    s->mmio_addrset      = p->mmio_addrset;
-    s->mmio_addrset_size = p->mmio_addrset_size;
-
     /* interrupts and exception setup for cosim */
     s->common.cosim             = false;
     s->common.pending_exception = -1;
@@ -1311,9 +1262,6 @@ void virt_machine_end(RISCVMachine *s) {
     for (int i = 0; i < s->ncpus; ++i) {
         riscv_cpu_end(s->cpu_state[i]);
     }
-
-    if (s->mmio_addrset_size > 0)
-        free(s->mmio_addrset);
 
     phys_mem_map_end(s->mem_map);
     free(s);
