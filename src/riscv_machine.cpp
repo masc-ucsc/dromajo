@@ -65,12 +65,7 @@
 //#define DUMP_PLIC
 //#define DUMP_DTB
 
-<<<<<<< HEAD
-#define USE_SIFIVE_UART
-#define USE_DW_APB_UART
-=======
 //#define USE_SIFIVE_UART
->>>>>>> a3257218ca6c41e622151d95d3f9a870befd30e3
 
 enum {
     SIFIVE_UART_TXFIFO = 0,
