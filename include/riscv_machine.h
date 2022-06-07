@@ -81,12 +81,6 @@ struct RISCVMachine {
 
     int virtio_count;
 
-    /* MMIO range (for co-simulation only) */
-    uint64_t    mmio_start;
-    uint64_t    mmio_end;
-    AddressSet *mmio_addrset;
-    uint64_t    mmio_addrset_size;
-
     /* Reset vector */
     uint64_t reset_vector;
 
@@ -125,7 +119,7 @@ struct RISCVMachine {
 #define IDE_BASE_ADDR         0x40009000
 #define VIRTIO_BASE_ADDR      0x40010000
 #define VIRTIO_SIZE           0x1000
-#define VIRTIO_IRQ            10 // Moved to avoid colliding
+#define VIRTIO_IRQ            4
 #define FRAMEBUFFER_BASE_ADDR 0x41000000
 
 // sifive,uart, same as qemu UART0 (qemu has 2 sifive uarts)
@@ -136,6 +130,6 @@ struct RISCVMachine {
 #define UART0_BASE_ADDR 0x54000000
 #define UART0_SIZE      32
 #endif
-#define UART0_IRQ 6
+#define UART0_IRQ       6
 
 #endif

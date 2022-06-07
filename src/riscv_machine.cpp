@@ -65,8 +65,12 @@
 //#define DUMP_PLIC
 //#define DUMP_DTB
 
+<<<<<<< HEAD
 #define USE_SIFIVE_UART
 #define USE_DW_APB_UART
+=======
+//#define USE_SIFIVE_UART
+>>>>>>> a3257218ca6c41e622151d95d3f9a870befd30e3
 
 enum {
     SIFIVE_UART_TXFIFO = 0,
@@ -129,16 +133,6 @@ static void uart_update_irq(SiFiveUARTState *s) {
     if (cond) {
         vm_error("uart_update_irq: FIXME we should raise IRQ saying that there is new data\n");
     }
-}
-
-static uint32_t mmio_read(void *opaque, uint32_t offset, int size_log2) {
-    vm_error("mmio_read: offset=%x size_log2=%d\n", offset, size_log2);
-
-    return 0;
-}
-
-static void mmio_write(void *opaque, uint32_t offset, uint32_t val, int size_log2) {
-    vm_error("mmio_write: offset=%x size_log2=%d val=%x\n", offset, size_log2, val);
 }
 
 static uint32_t uart_read(void *opaque, uint32_t offset, int size_log2) {
@@ -668,7 +662,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
     int       size;
     if (!dtb_name) {
         int       intc_phandle = 0;
-        int       max_xlen, i, cur_phandle, plic_phandle;
+        int       max_xlen, i, cur_phandle;
         char      isa_string[128], *q;
         uint32_t  misa;
         uint32_t  tab[4 * MAX_CPUS];
@@ -787,7 +781,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 
         fdt_prop_tab_u32(s, "interrupts-extended", tab, m->ncpus * 4);
 
-        plic_phandle = cur_phandle++;
+        int plic_phandle = cur_phandle++;
         fdt_prop_u32(s, "phandle", plic_phandle);
         fdt_prop_u32(s, "linux,phandle", plic_phandle);
 
@@ -838,22 +832,31 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 #endif
 
 #ifdef USE_DW_APB_UART
-        // Fake Synopsys™ DesignWare™ ABP™ UART (NS16550 compatible)
-        fdt_begin_node_num(s, "uart", DW_APB_UART0_BASE_ADDR);
-        {
-            fdt_prop_str(s, "compatible", "ns16550a");
-            fdt_prop_tab_u64_2(s, "reg", DW_APB_UART0_BASE_ADDR, DW_APB_UART0_SIZE);
-            //fdt_prop_u32(s, "clock-frequency", 0x384000);
-            //fdt_prop_u32(s, "snps,uart-16550-compatible", -1);
-            // fdt_prop_u32(s, "baudclk", 115200);
+        for (unsigned uart_no = 0; uart_no < 2; ++uart_no) {
+            uint64_t base_addr = uart_no == 0 ? DW_APB_UART0_BASE_ADDR : DW_APB_UART1_BASE_ADDR;
+            // Fake Synopsys™ DesignWare™ ABP™ UART (NS16550 compatible)
+            fdt_begin_node_num(s, "uart", base_addr);
+            // interrupts = <0x0a>;
+            // interrupt-parent = <0x09>;
+
+            fdt_prop_tab_u64_2(s, "reg", base_addr, DW_APB_UART0_SIZE);
             fdt_prop_u32(s, "current-speed", 115200);
+            fdt_prop_u32(s, "clock-frequency", 25000000);
             fdt_prop_u32(s, "reg-shift", 2);
             fdt_prop_u32(s, "reg-io-width", 4);
             fdt_prop_u32(s, "clocks", clock_phandle);
+            // fdt_prop_str(s, "compatible", "snps,dw-apb-uart");
+            fdt_prop_str(s, "compatible", "ns16550a");
+            /*
+            tab[0] = plic_phandle;
+            tab[1] = DW_APB_UART0_IRQ;
+            fdt_prop_tab_u32(s, "interrupts-extended", tab, 2);
+            */
+
             fdt_prop_u32(s, "interrupt-parent", plic_phandle);
-            fdt_prop_u32(s, "interrupts", 90);
+            fdt_prop_u32(s, "interrupts", uart_no == 0 ? DW_APB_UART0_IRQ : DW_APB_UART1_IRQ);
+            fdt_end_node(s);
         }
-        fdt_end_node(s);
 #endif
 
         fb_dev = m->common.fb_dev;
@@ -882,46 +885,32 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
         fdt_end_node(s); /* / */
 
         size = fdt_output(s, dst);
+        fdt_end(s);
     } else {
-        // write from other dts
-        FILE *        fPtr;
-        unsigned long fLen;
+        FILE *f = fopen(dtb_name, "rb");
+        fseek(f, 0, SEEK_END);
+        size = ftell(f);
+        rewind(f);
 
-        fPtr = fopen(dtb_name, "rb");  // Open the file in binary mode
-        fseek(fPtr, 0, SEEK_END);      // Jump to the end of the file
-        fLen = ftell(fPtr);            // Get the current byte offset in the file
-        rewind(fPtr);                  // Jump back to the beginning of the file
-
-        size_t result = fread((char *)dst, sizeof(uint8_t), fLen, fPtr);  // Read in the entire file
-        if (result != fLen) {
-            vm_error("DROMAJO failed reading the dts string\n");
+        if (fread((char *)dst, 1, size, f) != (size_t)size) {
+            vm_error("dromajo: %s: %s\n", dtb_name, strerror(errno));
             return -1;
         }
 
-        // DEBUG
-        // for (unsigned long i = 0; i < fLen; ++i)
-        //    printf("[DEBUG][%p][%ld/%ld] == 0x%x\n", &dst[i], i, fLen, dst[i]);
-        // printf("[DEBUG] Done printing\n");
-
-        fclose(fPtr);  // Close the file
-
-        size = fLen;
+        fclose(f);
     }
 
 #ifdef DUMP_DTB
     {
         FILE *f = fopen("dromajo.dtb", "wb");
-        if (f == nullptr) {
-            vm_error("DROMAJO failed to open dromajo.dtb dump file (disable DUMP_DTB?)\n");
+        if (!f) {
+            vm_error("dromajo: %s: %s\n", "dromajo.dtb", strerror(errno));
             return -1;
         }
         fwrite(dst, 1, size, f);
         fclose(f);
     }
 #endif
-
-    if (!dtb_name)
-        fdt_end(s);
 
     return size;
 }
@@ -1171,30 +1160,11 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     }
 
     /* RAM */
-    cpu_register_ram(s->mem_map, 0, 4096, 0);  // Have memory at 0 for uaccess-etcsr to pass
     cpu_register_ram(s->mem_map, s->ram_base_addr, s->ram_size, 0);
     cpu_register_ram(s->mem_map, ROM_BASE_ADDR, ROM_SIZE, 0);
 
     for (int i = 0; i < s->ncpus; ++i) {
         s->cpu_state[i]->physical_addr_len = p->physical_addr_len;
-    }
-
-    if (p->mmio_start) {
-        uint64_t sz = p->mmio_end - p->mmio_start;
-        cpu_register_device(s->mem_map, p->mmio_start, sz, 0, mmio_read, mmio_write, DEVIO_SIZE32 | DEVIO_SIZE16 | DEVIO_SIZE8);
-    }
-
-    if (p->mmio_addrset_size > 0) {
-        for (size_t i = 0; i < p->mmio_addrset_size; ++i) {
-            uint64_t sz = p->mmio_addrset[i].size;
-            cpu_register_device(s->mem_map,
-                                p->mmio_addrset[i].start,
-                                sz,
-                                0,
-                                mmio_read,
-                                mmio_write,
-                                DEVIO_SIZE32 | DEVIO_SIZE16 | DEVIO_SIZE8);
-        }
     }
 
     SiFiveUARTState *uart = (SiFiveUARTState *)calloc(sizeof *uart, 1);
@@ -1203,11 +1173,22 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     cpu_register_device(s->mem_map, UART0_BASE_ADDR, UART0_SIZE, uart, uart_read, uart_write, DEVIO_SIZE32);
 
     DW_apb_uart_state *dw_apb_uart = (DW_apb_uart_state *)calloc(sizeof *dw_apb_uart, 1);
-    dw_apb_uart->irq               = DW_APB_UART0_IRQ;
+    dw_apb_uart->irq               = &s->plic_irq[DW_APB_UART0_IRQ];
     dw_apb_uart->cs                = p->console;
     cpu_register_device(s->mem_map,
                         DW_APB_UART0_BASE_ADDR,
                         DW_APB_UART0_SIZE,
+                        dw_apb_uart,
+                        dw_apb_uart_read,
+                        dw_apb_uart_write,
+                        DEVIO_SIZE32 | DEVIO_SIZE16 | DEVIO_SIZE8);
+
+    DW_apb_uart_state *dw_apb_uart1 = (DW_apb_uart_state *)calloc(sizeof *dw_apb_uart, 1);
+    dw_apb_uart1->irq               = &s->plic_irq[DW_APB_UART1_IRQ];
+    dw_apb_uart1->cs                = p->console;
+    cpu_register_device(s->mem_map,
+                        DW_APB_UART1_BASE_ADDR,
+                        DW_APB_UART1_SIZE,
                         dw_apb_uart,
                         dw_apb_uart_read,
                         dw_apb_uart_write,
@@ -1236,7 +1217,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     irq_num       = VIRTIO_IRQ;
 
     /* virtio console */
-    if (p->console) {
+    if (p->console && 0) {
         vbus->irq             = &s->plic_irq[irq_num];
         s->common.console_dev = virtio_console_init(vbus, p->console);
         vbus->addr += VIRTIO_SIZE;
@@ -1311,12 +1292,6 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
                            p->cmdline))
         return NULL;
 
-    /* mmio setup for cosim */
-    s->mmio_start        = p->mmio_start;
-    s->mmio_end          = p->mmio_end;
-    s->mmio_addrset      = p->mmio_addrset;
-    s->mmio_addrset_size = p->mmio_addrset_size;
-
     /* interrupts and exception setup for cosim */
     s->common.cosim             = false;
     s->common.pending_exception = -1;
@@ -1356,9 +1331,6 @@ void virt_machine_end(RISCVMachine *s) {
     for (int i = 0; i < s->ncpus; ++i) {
         riscv_cpu_end(s->cpu_state[i]);
     }
-
-    if (s->mmio_addrset_size > 0)
-        free(s->mmio_addrset);
 
     phys_mem_map_end(s->mem_map);
     free(s);
