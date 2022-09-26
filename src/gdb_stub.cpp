@@ -392,6 +392,23 @@ void handle_rsp_stop_reason(const char *buf, const size_t buf_len) {
     send_rsp_pkt_to_gdb(response, strlen(response));
 }
 
+void handle_rsp_c(RISCVMachine *m) {
+    char response[8];
+    RISCVCPUState *cpu = m->cpu_state[hartid];
+    uint64_t last_pc = virt_machine_get_pc(m, 0);
+
+    while(1) {
+        if (!virt_machine_run(m, 0) || last_pc == virt_machine_get_pc(m, 0)) {
+            snprintf(response, 8, "W00");   // process exited normally
+            break;
+        }
+
+        last_pc = virt_machine_get_pc(m, 0);
+    }
+
+    send_rsp_pkt_to_gdb(response, strlen(response));
+}
+
 void handle_rsp_g(const char *buf, const size_t buf_len) {
     char response[33 * 16];
 
@@ -550,6 +567,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
 
         } else if (gdb_rsp_pkt_buf[0] == 'c') {
             printf("got c\n");
+            handle_rsp_c(m);
         } else if (gdb_rsp_pkt_buf[0] == 'D') {
             printf("got D\n");
         } else if (gdb_rsp_pkt_buf[0] == 'g') {
