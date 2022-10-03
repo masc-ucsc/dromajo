@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
     if (port_num)
       gdb_stub(m, port_num);
 
-#ifdef SIMPOINT_BB
+#ifdef SIMPOINT_BBhartid
     if (m->common.simpoints.empty()) {
         simpoint_bb_file = fopen("dromajo_simpoint.bb", "w");
         if (simpoint_bb_file == nullptr) {
@@ -231,6 +231,16 @@ int main(int argc, char **argv) {
             exit(-3);
         }
     }
+#endif
+
+#define BRANCHPROF
+#ifdef BRANCHPROF
+        FILE* pc_trace = fopen("pc_trace.txt", "w+");
+        if (pc_trace == nullptr) {
+            fprintf(dromajo_stderr, "\nerror: could not open pc_trace.txt for dumping trace\n");
+            exit(-3);
+        }
+    
 #endif
 
     execution_start_ts = get_current_time_in_seconds();
@@ -246,6 +256,13 @@ int main(int argc, char **argv) {
         if (!simpoint_step(m, 0))
           break;
       }
+#endif
+#ifdef BRANCHPROF
+	for (int i = 0; i < m->ncpus; ++i)
+	{
+		uint64_t pc            = virt_machine_get_pc(m, i);
+ 		fprintf (pc_trace, "pc = %"PRIu64"\n", pc);
+ 	}
 #endif
     } while (keep_going);
 
@@ -283,3 +300,5 @@ int main(int argc, char **argv) {
 
     return 0;
 }
+
+
