@@ -394,7 +394,6 @@ void handle_rsp_stop_reason(const char *buf, const size_t buf_len) {
 
 void handle_rsp_c(RISCVMachine *m) {
     char response[8];
-    RISCVCPUState *cpu = m->cpu_state[hartid];
     uint64_t last_pc = virt_machine_get_pc(m, 0);
 
     while(1) {
@@ -412,15 +411,15 @@ void handle_rsp_c(RISCVMachine *m) {
 void handle_rsp_g(const char *buf, const size_t buf_len) {
     char response[33 * 16];
 
-    // all riscv 31 registers (not x0)
+    // all riscv 32 registers
     uint8_t j;
-    for (j = 0; j < 31; j++) {
-        uint64_t v = virt_machine_get_reg(gdb_m, gdb_hartid, j + 1);
+    for (j = 0; j < 32; j++) {
+        uint64_t v = virt_machine_get_reg(gdb_m, gdb_hartid, j);
         val_to_hex16(v, 64, &(response[j * 16]));
     }
 
     uint64_t pc = virt_machine_get_pc(gdb_m, gdb_hartid);
-    val_to_hex16(pc, 64, &(response[31 * 16]));
+    val_to_hex16(pc, 64, &(response[32 * 16]));
 
     send_rsp_pkt_to_gdb(response, 32 * 16);
 }
@@ -431,7 +430,7 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
     uint64_t mem_base = strtoul(&buf[1], NULL, 16);
     uint64_t mem_size = 2;
 
-    for (int pos = 0; pos < buf_len; ++pos) {
+    for (uint64_t pos = 0; pos < buf_len; ++pos) {
         if (buf[pos] == ',') {
             mem_size = strtoul(&buf[pos + 1], NULL, 16);
         }
@@ -476,6 +475,37 @@ void handle_rsp_p(const char *buf, const size_t buf_len) {
 
     val_to_hex16(v, 64, response);
     send_rsp_pkt_to_gdb(response, 16);
+}
+
+void handle_rsp_P(RISCVMachine *m, const char *buf, const size_t buf_len) {
+    RISCVCPUState *cpu = m->cpu_state[0];
+
+    uint64_t reg = strtoul(&buf[1], NULL, 16);
+    uint64_t val = 0;
+
+    int buf_offset = 3;
+    if (reg > 0xF)
+        buf_offset++;   // extra char for reg alias sent in msg
+
+    for (int i = 0; i < 8; i++) {
+        char byte[3];
+        const char *ptr = &buf[i * 2 + buf_offset];
+        strncpy(byte, ptr, 2);
+        val += strtol(byte, NULL, 16) << i * 8;
+    }
+    printf("reg val gotten: %ld\n",reg);
+    if (reg == 0x20) { // PC
+        riscv_set_pc(cpu, val);
+    } else if (reg < 0x20) {
+        riscv_set_reg(cpu, reg, val);
+    } else {
+        char err_resp[] = "E 2";  // out of bounds register number???
+        send_rsp_pkt_to_gdb(err_resp, strlen(err_resp));
+        return;
+    }
+
+    char ok_resp[] = "OK";
+    send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
 }
 
 void handle_rsp_q(const char *buf, const size_t buf_len) {
@@ -569,7 +599,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
             printf("got c\n");
             handle_rsp_c(m);
         } else if (gdb_rsp_pkt_buf[0] == 'D') {
-            printf("got D\n");
+            printf("got D\n");  // this is just 'quit' so lets exit gracefully
         } else if (gdb_rsp_pkt_buf[0] == 'g') {
             handle_rsp_g(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'G') {
@@ -582,6 +612,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
             handle_rsp_p(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'P') {
             printf("got P\n");
+            handle_rsp_P(m, gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'q') {
             handle_rsp_q(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 's') {
