@@ -38,6 +38,13 @@
 #include "dromajo_cosim.h"
 #endif
 
+#define BRANCHPROF
+#ifdef BRANCHPROF
+        FILE* pc_trace;
+        typedef enum {TWO,FOUR} inst_length_t; // Always FOUR for now
+        inst_length_t inst_length;
+#endif
+
 #ifdef SIMPOINT_BB
 FILE *simpoint_bb_file = nullptr;
 
@@ -126,6 +133,57 @@ int iterate_core(RISCVMachine *m, int hartid) {
     int      priv     = riscv_get_priv_level(cpu);
     uint32_t insn_raw = -1;
     (void)riscv_read_insn(cpu, &insn_raw, last_pc);
+ 
+#ifdef BRANCHPROF
+	static uint64_t last_last_pc;
+	static uint8_t branch_flag = 0;
+	for (int i = 0; i < m->ncpus; ++i)
+	{
+ 		
+ 		if (branch_flag)
+ 		{
+ 			if (last_pc-last_last_pc == 4)
+ 				fprintf (pc_trace, "%20s\n", "Not Taken Branch");
+ 			else
+ 				fprintf (pc_trace, "%20s\n", "Taken Branch");
+ 			branch_flag = 0;
+ 		}
+ 			
+ 		
+ 		if ( ((insn_raw & 0x7fff) == 0x73)) 
+ 		{
+ 			if (( ((insn_raw & 0x1ffffff) == 0x0)) )
+ 				// ECall
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ECALL type");
+ 			else if (( ((insn_raw & 0xf0000000) != 0x1)) )
+ 				//Return
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ERET type");
+ 		}
+ 		
+ 		else if (((insn_raw & 0x70) == 0x60))
+ 		{
+ 			if (((insn_raw & 0xf) == 0x3))
+ 			{
+ 				branch_flag = 1;
+ 				if (last_pc-last_last_pc == 4)
+ 					// Branch Not taken
+ 					fprintf (pc_trace, "%20lx\t|%20x\t|", last_pc, insn_raw);
+ 				else
+ 					// Branch Taken
+ 					fprintf (pc_trace, "%20lx\t|%20x\t||", last_pc, insn_raw);
+ 			}
+ 			else // Jump
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "JUMP type");
+ 		}
+ 		// Non CTI
+ 		else 
+ 			fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "Non - CTI");
+ 			
+ 		//fprintf (pc_trace, "\n");
+ 		last_last_pc = last_pc;
+ 	}
+#endif // BRANCHPROF
+
     int keep_going = virt_machine_run(m, hartid);
     if (last_pc == virt_machine_get_pc(m, hartid))
         return 0;
@@ -233,12 +291,17 @@ int main(int argc, char **argv) {
     }
 #endif
 
-#define BRANCHPROF
 #ifdef BRANCHPROF
-        FILE* pc_trace = fopen("pc_trace.txt", "w+");
-        if (pc_trace == nullptr) {
-            fprintf(dromajo_stderr, "\nerror: could not open pc_trace.txt for dumping trace\n");
-            exit(-3);
+        pc_trace = fopen("pc_trace.txt", "w+");
+        if (pc_trace == nullptr) 
+        {
+            	fprintf(dromajo_stderr, "\nerror: could not open pc_trace.txt for dumping trace\n");
+            	exit(-3);
+        }
+        else
+        {
+        	fprintf(dromajo_stderr, "\nOpened dromajo_simpoint.bb for dumping trace\n");
+        	fprintf (pc_trace, "%20s\t\t|%20s\t|%20s\n", "PC", "Instruction", "Instructiontype");
         }
     
 #endif
@@ -257,13 +320,13 @@ int main(int argc, char **argv) {
           break;
       }
 #endif
-#ifdef BRANCHPROF
+/*#ifdef BRANCHPROF
 	for (int i = 0; i < m->ncpus; ++i)
 	{
 		uint64_t pc            = virt_machine_get_pc(m, i);
  		fprintf (pc_trace, "pc = %"PRIu64"\n", pc);
  	}
-#endif
+#endif*/
     } while (keep_going);
 
     double t = get_current_time_in_seconds();
@@ -282,6 +345,9 @@ int main(int argc, char **argv) {
     fprintf(dromajo_stderr, "\nPower off.\n");
 
     virt_machine_end(m);
+#ifdef BRANCHPROF
+    fclose (pc_trace);
+#endif
 
 #endif
 
