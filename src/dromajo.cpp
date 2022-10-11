@@ -41,8 +41,57 @@
 #define BRANCHPROF
 #ifdef BRANCHPROF
         FILE* pc_trace;
-        typedef enum {TWO,FOUR} inst_length_t; // Always FOUR for now
-        inst_length_t inst_length;
+        
+void print_branch_info (uint64_t last_pc, uint32_t insn_raw)
+{
+        static uint64_t last_last_pc;
+	static uint8_t branch_flag = 0;
+	//for (int i = 0; i < m->ncpus; ++i)
+	{
+ 		
+ 		if (branch_flag)
+ 		{
+ 			if (last_pc-last_last_pc == 4)
+ 				fprintf (pc_trace, "%20s\n", "Not Taken Branch");
+ 			else
+ 				fprintf (pc_trace, "%20s\n", "Taken Branch");
+ 			branch_flag = 0;
+ 		}
+ 			
+ 		
+ 		if ( ((insn_raw & 0x7fff) == 0x73)) 
+ 		{
+ 			if (( ((insn_raw & 0x1ffffff) == 0x0)) )
+ 				// ECall
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ECALL type");
+ 			else if (( ((insn_raw & 0xf0000000) != 0x1)) )
+ 				//Return
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ERET type");
+ 		}
+ 		
+ 		else if (((insn_raw & 0x70) == 0x60))
+ 		{
+ 			if (((insn_raw & 0xf) == 0x3))
+ 			{
+ 				branch_flag = 1;
+ 				if (last_pc-last_last_pc == 4)
+ 					// Branch Not taken
+ 					fprintf (pc_trace, "%20lx\t|%20x\t|", last_pc, insn_raw);
+ 				else
+ 					// Branch Taken
+ 					fprintf (pc_trace, "%20lx\t|%20x\t||", last_pc, insn_raw);
+ 			}
+ 			else // Jump
+ 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "JUMP type");
+ 		}
+ 		// Non CTI
+ 		else 
+ 			fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "Non - CTI");
+ 			
+ 		//fprintf (pc_trace, "\n");
+ 		last_last_pc = last_pc;
+ 	}
+}
 #endif
 
 #ifdef SIMPOINT_BB
@@ -135,53 +184,10 @@ int iterate_core(RISCVMachine *m, int hartid) {
     (void)riscv_read_insn(cpu, &insn_raw, last_pc);
  
 #ifdef BRANCHPROF
-	static uint64_t last_last_pc;
-	static uint8_t branch_flag = 0;
 	for (int i = 0; i < m->ncpus; ++i)
 	{
- 		
- 		if (branch_flag)
- 		{
- 			if (last_pc-last_last_pc == 4)
- 				fprintf (pc_trace, "%20s\n", "Not Taken Branch");
- 			else
- 				fprintf (pc_trace, "%20s\n", "Taken Branch");
- 			branch_flag = 0;
- 		}
- 			
- 		
- 		if ( ((insn_raw & 0x7fff) == 0x73)) 
- 		{
- 			if (( ((insn_raw & 0x1ffffff) == 0x0)) )
- 				// ECall
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ECALL type");
- 			else if (( ((insn_raw & 0xf0000000) != 0x1)) )
- 				//Return
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ERET type");
- 		}
- 		
- 		else if (((insn_raw & 0x70) == 0x60))
- 		{
- 			if (((insn_raw & 0xf) == 0x3))
- 			{
- 				branch_flag = 1;
- 				if (last_pc-last_last_pc == 4)
- 					// Branch Not taken
- 					fprintf (pc_trace, "%20lx\t|%20x\t|", last_pc, insn_raw);
- 				else
- 					// Branch Taken
- 					fprintf (pc_trace, "%20lx\t|%20x\t||", last_pc, insn_raw);
- 			}
- 			else // Jump
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "JUMP type");
- 		}
- 		// Non CTI
- 		else 
- 			fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "Non - CTI");
- 			
- 		//fprintf (pc_trace, "\n");
- 		last_last_pc = last_pc;
- 	}
+		print_branch_info (last_pc, insn_raw);
+	}
 #endif // BRANCHPROF
 
     int keep_going = virt_machine_run(m, hartid);
