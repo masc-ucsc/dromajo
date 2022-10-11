@@ -58,15 +58,18 @@ void print_branch_info (uint64_t last_pc, uint32_t insn_raw)
  			branch_flag = 0;
  		}
  			
- 		
+ 		fprintf (pc_trace, "%20lx\t|%20x\t", last_pc, insn_raw);
+ 		if (insn_raw < 0x100)
+ 			fprintf (pc_trace, "\t|");
+ 		else
+ 			fprintf (pc_trace, "|");
+ 					
  		if ( ((insn_raw & 0x7fff) == 0x73)) 
  		{
- 			if (( ((insn_raw & 0x1ffffff) == 0x0)) )
- 				// ECall
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ECALL type");
- 			else if (( ((insn_raw & 0xf0000000) != 0x1)) )
- 				//Return
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "ERET type");
+ 			if (( ((insn_raw & 0x1ffffff) == 0x0)) ) 				// ECall
+ 				fprintf (pc_trace, "%20s\n", "ECALL type");
+ 			else if (( ((insn_raw & 0xf0000000) != 0x1)) ) 		//Return
+ 				fprintf (pc_trace, "%20s\n", "ERET type");
  		}
  		
  		else if (((insn_raw & 0x70) == 0x60))
@@ -74,19 +77,14 @@ void print_branch_info (uint64_t last_pc, uint32_t insn_raw)
  			if (((insn_raw & 0xf) == 0x3))
  			{
  				branch_flag = 1;
- 				if (last_pc-last_last_pc == 4)
- 					// Branch Not taken
- 					fprintf (pc_trace, "%20lx\t|%20x\t|", last_pc, insn_raw);
- 				else
- 					// Branch Taken
- 					fprintf (pc_trace, "%20lx\t|%20x\t||", last_pc, insn_raw);
  			}
  			else // Jump
- 				fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "JUMP type");
+ 				fprintf (pc_trace, "%20s\n", "JUMP type");
  		}
- 		// Non CTI
- 		else 
- 			fprintf (pc_trace, "%20lx\t|%20x\t|%20s\n", last_pc, insn_raw, "Non - CTI");
+ 		else // Non CTI 
+ 		{
+ 			fprintf (pc_trace, "%20s\n", "Non - CTI");
+ 		}
  			
  		//fprintf (pc_trace, "\n");
  		last_last_pc = last_pc;
