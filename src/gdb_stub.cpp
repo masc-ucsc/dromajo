@@ -646,6 +646,57 @@ void gdb_stub(RISCVMachine *m, int port_num) {
 
         // https://sourceware.org/gdb/onlinedocs/gdb/Remote-Protocol.html#Remote-Protocol
         size_t n = (size_t)sn;
+        switch (gdb_rsp_pkt_buf[0]) {
+            case control_c:
+                printf("got control c\n");
+                break;
+            case '?':
+                handle_rsp_stop_reason(gdb_rsp_pkt_buf, n);
+                break;
+            case 'c':
+                handle_rsp_c();
+                break;
+            case 'D':
+                handle_rsp_D();
+                break;
+            case 'g':
+                handle_rsp_g(gdb_rsp_pkt_buf, n);
+                break;
+            case 'G':
+                handle_rsp_G(gdb_rsp_pkt_buf, n);
+                break;
+            case 'H':
+                send_rsp_pkt_to_gdb("OK", 0);  // Set thread (no thread at the moment)
+                break;
+            case 'm':
+                handle_rsp_m(gdb_rsp_pkt_buf, n);
+                break;
+            case 'M':
+                printf("got M\n");          // XXX - TODO
+                break;
+            case 'p':
+                handle_rsp_p(gdb_rsp_pkt_buf, n);
+                break;
+            case 'P':
+                handle_rsp_P(gdb_rsp_pkt_buf, n);
+                break;
+            case 'q':
+                handle_rsp_q(gdb_rsp_pkt_buf, n);
+                break;
+            case 's':
+                printf("got s\n");          // XXX - TODO
+                break;
+            case 'X':
+                printf("got X\n");          // XXX - TODO
+                break;
+            default:
+                if (strcmp(gdb_rsp_pkt_buf, "vMustReplyEmpty"))
+                    printf("WARNING: Unrecognized packet %c\n", gdb_rsp_pkt_buf[0]);
+
+                send_rsp_pkt_to_gdb("", 0);
+                break;
+        }
+        /*
         if (gdb_rsp_pkt_buf[0] == control_c) {
             printf("got control c\n");
         } else if (gdb_rsp_pkt_buf[0] == '?') {
@@ -681,10 +732,10 @@ void gdb_stub(RISCVMachine *m, int port_num) {
         } else {
             printf("WARNING: Unrecognized packet %c\n", gdb_rsp_pkt_buf[0]);
             send_rsp_pkt_to_gdb("", 0);
-        }
+        }*/
     }
 
 done:
     close(conn_sock);
-    // gdb stub code enging here
+    // gdb stub code ending here
 }
