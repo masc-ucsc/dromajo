@@ -392,23 +392,23 @@ void handle_rsp_stop_reason(const char *buf, const size_t buf_len) {
     send_rsp_pkt_to_gdb(response, strlen(response));
 }
 
-void handle_rsp_c(RISCVMachine *m) {
+void handle_rsp_c() {
     char response[8];
-    uint64_t last_pc = virt_machine_get_pc(m, 0);
+    uint64_t last_pc = virt_machine_get_pc(gdb_m, 0);
 
     while(1) {
-        if (!virt_machine_run(m, 0) || last_pc == virt_machine_get_pc(m, 0)) {
+        if (!virt_machine_run(gdb_m, 0) || last_pc == virt_machine_get_pc(gdb_m, 0)) {
             snprintf(response, 8, "W00");   // process exited normally
             break;
         }
 
-        last_pc = virt_machine_get_pc(m, 0);
+        last_pc = virt_machine_get_pc(gdb_m, 0);
     }
 
     send_rsp_pkt_to_gdb(response, strlen(response));
 }
 
-void handle_rsp_D(RISCVMachine *m) {
+void handle_rsp_D() {
     char ok_resp[] = "OK";
     send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
 }
@@ -428,8 +428,8 @@ void handle_rsp_g(const char *buf, const size_t buf_len) {
     send_rsp_pkt_to_gdb(response, 32 * 16);
 }
 
-void handle_rsp_G(RISCVMachine *m, const char *buf, const size_t buf_len) {
-    RISCVCPUState *cpu = m->cpu_state[0];
+void handle_rsp_G(const char *buf, const size_t buf_len) {
+    RISCVCPUState *cpu = gdb_m->cpu_state[gdb_hartid];
 
     // all riscv 32 registers - except x0
     for (int i = 1; i < 32; i++) {
@@ -482,30 +482,43 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
 }
 
 void handle_rsp_p(const char *buf, const size_t buf_len) {
-    char response[16];
-
     uint64_t reg = strtoul(&buf[1], NULL, 16);
 
     uint64_t v;
-
-    if (reg == 0x20) {  // PC
+    if (reg == 0x20)                        // PC
         v = virt_machine_get_pc(gdb_m, gdb_hartid);
-    } else if (reg < 0x20) {
+    else if (reg < 0x20)                    // xreg
         v = virt_machine_get_reg(gdb_m, gdb_hartid, reg + 1);
-    } else if (reg > 0x20 && reg < 0x44) {
-
-    } else {
-        char resp[] = "E 2";  // out of bounds register number???
-        send_rsp_pkt_to_gdb(resp, strlen(resp));
-        return;
+    else if (reg > 0x20 && reg <= 0x40)     // freg
+        v = virt_machine_get_fpreg(gdb_m, gdb_hartid, reg - 0x21);
+    else {
+        RISCVCPUState *cpu = gdb_m->cpu_state[gdb_hartid];
+        switch (reg) {
+#if FLEN > 0
+            case 0x42:
+                v = cpu->fflags;
+                break;
+            case 0x43:
+                v = cpu->frm;
+                break;
+            case 0x44:
+                v = cpu->frm << 5 | cpu->fflags;
+                break;
+#endif
+            default:
+                char resp[] = "E 2";  // out of bounds register number???
+                send_rsp_pkt_to_gdb(resp, strlen(resp));
+                return;
+        }
     }
 
+    char response[16];
     val_to_hex16(v, 64, response);
     send_rsp_pkt_to_gdb(response, 16);
 }
 
-void handle_rsp_P(RISCVMachine *m, const char *buf, const size_t buf_len) {
-    RISCVCPUState *cpu = m->cpu_state[0];
+void handle_rsp_P(const char *buf, const size_t buf_len) {
+    RISCVCPUState *cpu = gdb_m->cpu_state[gdb_hartid];
 
     uint64_t reg = strtoul(&buf[1], NULL, 16);
     uint64_t val = 0;
@@ -521,14 +534,31 @@ void handle_rsp_P(RISCVMachine *m, const char *buf, const size_t buf_len) {
         val += strtol(byte, NULL, 16) << i * 8;
     }
 
-    if (reg == 0x20) { // PC
+    if (reg == 0x20)                        // PC
         riscv_set_pc(cpu, val);
-    } else if (reg < 0x20) {
+    else if (reg < 0x20)                    // xreg
         riscv_set_reg(cpu, reg, val);
-    } else {
-        char err_resp[] = "E 2";  // out of bounds register number???
-        send_rsp_pkt_to_gdb(err_resp, strlen(err_resp));
-        return;
+    else if (reg > 0x20 && reg <= 0x40)     // freg
+        cpu->fp_reg[reg - 0x21] = (val);
+    else {
+        switch (reg) {
+#if FLEN > 0
+            case 0x42:
+                cpu->fflags = val & 0x1F;
+                break;
+            case 0x43:
+                cpu->frm    = val & 7;
+                break;
+            case 0x44:
+                cpu->frm    = (val >> 5) & 7;
+                cpu->fflags = val & 0x1F;
+                break;
+#endif
+            default:
+                char resp[] = "E 2";  // out of bounds register number???
+                send_rsp_pkt_to_gdb(resp, strlen(resp));
+                return;
+        }
     }
 
     char ok_resp[] = "OK";
@@ -622,14 +652,14 @@ void gdb_stub(RISCVMachine *m, int port_num) {
             printf("got ?\n");
             handle_rsp_stop_reason(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'c') {
-            handle_rsp_c(m);
+            handle_rsp_c();
         } else if (gdb_rsp_pkt_buf[0] == 'D') {
-            handle_rsp_D(m);
+            handle_rsp_D();
         } else if (gdb_rsp_pkt_buf[0] == 'g') {
             handle_rsp_g(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'G') {
             printf("got G\n");
-            handle_rsp_G(m, gdb_rsp_pkt_buf, n);
+            handle_rsp_G(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'm') {
             handle_rsp_m(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'M') {
@@ -637,7 +667,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
         } else if (gdb_rsp_pkt_buf[0] == 'p') {
             handle_rsp_p(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'P') {
-            handle_rsp_P(m, gdb_rsp_pkt_buf, n);
+            handle_rsp_P(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 'q') {
             handle_rsp_q(gdb_rsp_pkt_buf, n);
         } else if (gdb_rsp_pkt_buf[0] == 's') {
