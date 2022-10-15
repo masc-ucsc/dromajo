@@ -52,24 +52,32 @@ void print_branch_info (uint64_t last_pc, uint32_t insn_raw)
  		if (branch_flag)
  		{
  			if (last_pc-last_last_pc == 4)
- 				fprintf (pc_trace, "%20s\n", "Not Taken Branch");
+ 				fprintf (pc_trace, "%32s\n", "Not Taken Branch");
  			else
- 				fprintf (pc_trace, "%20s\n", "Taken Branch");
+ 				fprintf (pc_trace, "%32s\n", "Taken Branch");
  			branch_flag = 0;
  		}
  			
  		fprintf (pc_trace, "%20lx\t|%20x\t", last_pc, insn_raw);
  		if (insn_raw < 0x100)
+ 		{
  			fprintf (pc_trace, "\t|");
+ 		}
  		else
+ 		{
  			fprintf (pc_trace, "|");
+ 		}
  					
  		if ( ((insn_raw & 0x7fff) == 0x73)) 
  		{
- 			if (( ((insn_raw & 0x1ffffff) == 0x0)) ) 				// ECall
- 				fprintf (pc_trace, "%20s\n", "ECALL type");
- 			else if (( ((insn_raw & 0xf0000000) != 0x1)) ) 		//Return
- 				fprintf (pc_trace, "%20s\n", "ERET type");
+ 			if (( ((insn_raw & 0xffffff80) == 0x0)) ) 				// ECall
+ 			{
+ 				fprintf (pc_trace, "%32s\n", "ECALL type");
+ 			}
+ 			else if ( (insn_raw == 0x100073) || (insn_raw == 0x200073) || (insn_raw == 0x30200073) || (insn_raw == 0x7b200073))		//EReturn
+ 			{
+ 				fprintf (pc_trace, "%32s\n", "ERET type");
+ 			}
  		}
  		
  		else if (((insn_raw & 0x70) == 0x60))
@@ -79,11 +87,27 @@ void print_branch_info (uint64_t last_pc, uint32_t insn_raw)
  				branch_flag = 1;
  			}
  			else // Jump
- 				fprintf (pc_trace, "%20s\n", "JUMP type");
+ 			{
+ 				if((insn_raw & 0xf) == 0x7)
+ 				{
+ 					if  (((insn_raw & 0xf80)>>7) == 0x0)    
+ 					{
+ 						fprintf (pc_trace, "%32s\n", "Return");
+ 					}
+ 					else
+ 					{
+ 						fprintf (pc_trace, "%32s\n", "Reg based Fxn Call");
+ 					}
+ 				}
+ 				else
+ 				{
+ 					fprintf (pc_trace, "%32s\n", "PC relative Fxn Call");
+ 				}
+ 			}
  		}
  		else // Non CTI 
  		{
- 			fprintf (pc_trace, "%20s\n", "Non - CTI");
+ 			fprintf (pc_trace, "%32s\n", "Non - CTI");
  		}
  			
  		//fprintf (pc_trace, "\n");
@@ -305,7 +329,7 @@ int main(int argc, char **argv) {
         else
         {
         	fprintf(dromajo_stderr, "\nOpened dromajo_simpoint.bb for dumping trace\n");
-        	fprintf (pc_trace, "%20s\t\t|%20s\t|%20s\n", "PC", "Instruction", "Instructiontype");
+        	fprintf (pc_trace, "%20s\t\t|%20s\t|%32s\n", "PC", "Instruction", "Instructiontype");
         }
     
 #endif
