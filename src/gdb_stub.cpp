@@ -450,26 +450,25 @@ void handle_rsp_G(const char *buf, const size_t buf_len) {
 }
 
 void handle_rsp_m(const char *buf, const size_t buf_len) {
-    printf("handle_rsp_m %s (memory read called) FIXME\n", buf);
-
-    uint64_t mem_base = strtoul(&buf[1], NULL, 16);
-    uint64_t mem_size = 2;
+    uint64_t addr = strtoul(&buf[1], NULL, 16);
+    uint64_t unit_size = 2;
 
     for (uint64_t pos = 0; pos < buf_len; ++pos) {
         if (buf[pos] == ',') {
-            mem_size = strtoul(&buf[pos + 1], NULL, 16);
+            unit_size = strtoul(&buf[pos + 1], NULL, 16);
         }
     }
-    if (mem_size < 1) {
+
+    if (unit_size < 1) {
         char response[] = "E 1";  // invalid size request
         send_rsp_pkt_to_gdb(response, strlen(response));
         return;
     }
 
-    char *dump = (char *)alloca(2 * mem_size);  // 2 chars per byte
+    char *dump = (char *)alloca(2 * unit_size);  // 2 chars per byte
 
-    for (uint64_t i = 0u; i < mem_size; ++i) {
-        uint64_t v = virt_machine_read_u8(gdb_m, gdb_hartid, mem_base + i);
+    for (uint64_t i = 0u; i < unit_size; ++i) {
+        uint64_t v = virt_machine_read_u8(gdb_m, gdb_hartid, addr + i);
         if (v > 255) {  // error. Respond whatever we got
             send_rsp_pkt_to_gdb(dump, 2 * i);
             return;
@@ -478,7 +477,13 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
         val_to_hex16(v, 8, &dump[i * 2]);
     }
 
-    send_rsp_pkt_to_gdb(dump, 2 * mem_size);
+    send_rsp_pkt_to_gdb(dump, 2 * unit_size);
+}
+
+void handle_rsp_M(const char *buf, const size_t buf_len) {
+    // XXX - is this depracated?    
+    char ok_resp[] = "OK";
+    send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
 }
 
 void handle_rsp_p(const char *buf, const size_t buf_len) {
@@ -582,6 +587,28 @@ void handle_rsp_q(const char *buf, const size_t buf_len) {
         send_rsp_pkt_to_gdb(response, strlen(response));
     }
 }
+
+void handle_rsp_X(const char *buf, const size_t buf_len) {
+    uint64_t addr = strtoul(&buf[1], NULL, 16);
+    uint64_t unit_size = 2;
+
+    for (uint64_t pos = 0; pos < buf_len; ++pos) {
+        if (buf[pos] == ',') {
+            unit_size = strtoul(&buf[pos + 1], NULL, 16);
+        }
+    }
+
+    if (unit_size < 1) {
+        char response[] = "E 1";  // invalid size request
+        send_rsp_pkt_to_gdb(response, strlen(response));
+        return;
+    }
+    printf("addr found: %ld unit_size found: %ld\n", addr, unit_size);
+    printf("%s buf with len %ld \n", buf, buf_len);
+    char ok_resp[] = "OK";
+    send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
+}
+
 
 // GDB STUB RELATED CODE ENDING HERE
 ////////////////////////////////////
@@ -688,6 +715,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
                 break;
             case 'X':
                 printf("got X\n");          // XXX - TODO
+		handle_rsp_X(gdb_rsp_pkt_buf, n);
                 break;
             default:
                 if (strcmp(gdb_rsp_pkt_buf, "vMustReplyEmpty"))
