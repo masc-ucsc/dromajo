@@ -396,7 +396,7 @@ void handle_rsp_c() {
     char response[8];
     uint64_t last_pc = virt_machine_get_pc(gdb_m, 0);
 
-    while(1) {
+    while(1) { // should be while loops of steps, as this can stop due to breakpoints
         if (!virt_machine_run(gdb_m, 0) || last_pc == virt_machine_get_pc(gdb_m, 0)) {
             snprintf(response, 8, "W00");   // process exited normally
             break;
@@ -449,13 +449,20 @@ void handle_rsp_G(const char *buf, const size_t buf_len) {
     send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
 }
 
+void handle_rsp_H(const char *buf, const size_t buf_len) {
+    // will set thread eventually
+}
+
 void handle_rsp_m(const char *buf, const size_t buf_len) {
-    uint64_t addr = strtoul(&buf[1], NULL, 16);
+    RISCVCPUState *cpu = gdb_m->cpu_state[gdb_hartid];
+    uint64_t addr      = strtoul(&buf[1], NULL, 16);
     uint64_t unit_size = 2;
 
     for (uint64_t pos = 0; pos < buf_len; ++pos)
         if (buf[pos] == ',')
             unit_size = strtoul(&buf[pos + 1], NULL, 16);
+
+    printf("attempt to access %ld bytes at memory location 0x%lx\n", unit_size, addr);
 
     if (unit_size < 1 || !get_phys_mem_range(cpu->mem_map, addr)) {
         char response[] = "E 1";  // invalid size/addr request
@@ -580,10 +587,25 @@ void handle_rsp_q(const char *buf, const size_t buf_len) {
     } else if (strncmp("qTStatus", buf, strlen("qTStatus")) == 0) {
         char response[] = "T0";
         send_rsp_pkt_to_gdb(response, strlen(response));
+    } else if (strncmp("qSymbol", buf, strlen("qSymbol")) == 0) {
+        char response[] = "OK";
+        send_rsp_pkt_to_gdb(response, strlen(response));
+    } else if (strncmp("qL", buf, 2) == 0) {
+        char response[] = "qM0010000000000000000";
+        send_rsp_pkt_to_gdb(response, strlen(response));
     } else {
         char response[] = "";
         send_rsp_pkt_to_gdb(response, strlen(response));
     }
+}
+
+void handle_rsp_s(const char *buf, const size_t buf_len) {
+    char response[8];
+    //char response[] = "";
+    virt_machine_run(gdb_m, 0);
+    snprintf(response, 8, "T00");   // step completed normally
+
+    send_rsp_pkt_to_gdb(response, strlen(response));
 }
 
 void handle_rsp_X(const char *buf, const size_t buf_len) {
@@ -611,7 +633,6 @@ void handle_rsp_X(const char *buf, const size_t buf_len) {
     char ok_resp[] = "OK";
     send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
 }
-
 
 // GDB STUB RELATED CODE ENDING HERE
 ////////////////////////////////////
@@ -662,6 +683,11 @@ void gdb_stub(RISCVMachine *m, int port_num) {
         goto done;
     }
 
+    /* no debug symbols to be found in bootrom, so we manually skip it */
+    for (int i = 0; i < 10; i++)
+        virt_machine_run(gdb_m, 0);
+    /* should start at DRAM base addr now */
+
     while (true) {
         ssize_t sn = recv_rsp_pkt_gdb(gdb_rsp_pkt_buf, GDB_RSP_PKT_BUF_MAX);
         printf("value of sn is: %ld\n", sn);
@@ -696,6 +722,7 @@ void gdb_stub(RISCVMachine *m, int port_num) {
                 handle_rsp_G(gdb_rsp_pkt_buf, n);
                 break;
             case 'H':
+                //handle_rsp_H(gdb_rsp_pkt_buf, n);
                 send_rsp_pkt_to_gdb("OK", 0);  // Set thread (no thread at the moment)
                 break;
             case 'm':
@@ -714,11 +741,12 @@ void gdb_stub(RISCVMachine *m, int port_num) {
                 handle_rsp_q(gdb_rsp_pkt_buf, n);
                 break;
             case 's':
+                handle_rsp_s(gdb_rsp_pkt_buf, n);
                 printf("got s\n");          // XXX - TODO
                 break;
             case 'X':
                 printf("got X\n");          // XXX - TODO
-		handle_rsp_X(gdb_rsp_pkt_buf, n);
+		        handle_rsp_X(gdb_rsp_pkt_buf, n);
                 break;
             default:
                 if (strcmp(gdb_rsp_pkt_buf, "vMustReplyEmpty"))
@@ -727,43 +755,6 @@ void gdb_stub(RISCVMachine *m, int port_num) {
                 send_rsp_pkt_to_gdb("", 0);
                 break;
         }
-        /*
-        if (gdb_rsp_pkt_buf[0] == control_c) {
-            printf("got control c\n");
-        } else if (gdb_rsp_pkt_buf[0] == '?') {
-            printf("got ?\n");
-            handle_rsp_stop_reason(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'c') {
-            handle_rsp_c();
-        } else if (gdb_rsp_pkt_buf[0] == 'D') {
-            handle_rsp_D();
-        } else if (gdb_rsp_pkt_buf[0] == 'g') {
-            handle_rsp_g(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'G') {
-            printf("got G\n");
-            handle_rsp_G(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'm') {
-            handle_rsp_m(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'M') {
-            printf("got M\n");
-        } else if (gdb_rsp_pkt_buf[0] == 'p') {
-            handle_rsp_p(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'P') {
-            handle_rsp_P(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 'q') {
-            handle_rsp_q(gdb_rsp_pkt_buf, n);
-        } else if (gdb_rsp_pkt_buf[0] == 's') {
-            printf("got s\n");
-        } else if (strcmp(gdb_rsp_pkt_buf, "vMustReplyEmpty") == 0) {
-            send_rsp_pkt_to_gdb("", 0);
-        } else if (gdb_rsp_pkt_buf[0] == 'H') {
-            send_rsp_pkt_to_gdb("OK", 0);  // Set thread (no thread at the moment)
-        } else if (gdb_rsp_pkt_buf[0] == 'X') {
-            printf("got X\n");
-        } else {
-            printf("WARNING: Unrecognized packet %c\n", gdb_rsp_pkt_buf[0]);
-            send_rsp_pkt_to_gdb("", 0);
-        }*/
     }
 
 done:
