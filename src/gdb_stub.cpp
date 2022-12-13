@@ -474,6 +474,7 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
 
     for (uint64_t i = 0u; i < unit_size; i++) {
         uint64_t v = virt_machine_read_u8(gdb_m, gdb_hartid, addr + i);
+        printf("read val: 0x%lx \n", v);
         if (v > 255) {  // error. Respond whatever we got
             send_rsp_pkt_to_gdb(dump, 2 * i);
             return;
@@ -622,13 +623,65 @@ void handle_rsp_X(const char *buf, const size_t buf_len) {
             break;
         }
 
-    PhysMemoryRange *pr = get_phys_mem_range(cpu->mem_map, addr);
-
+    /*PhysMemoryRange *pr = get_phys_mem_range(cpu->mem_map, addr);
     if (unit_size < 1 || !pr) {
+        printf("invalid size/addr request \n");
         char response[] = "E 1";  // invalid size/addr request
         send_rsp_pkt_to_gdb(response, strlen(response));
         return;
+    }*/
+    
+    
+
+    int size_log2;
+    if (unit_size == 1)
+        size_log2 = 3;
+    else if (unit_size == 4)
+        size_log2 = 5;
+    else
+        size_log2 = 6;
+
+    uint32_t tlb_idx;
+    if (!CONFIG_ALLOW_MISALIGNED_ACCESS && (addr & (unit_size - 1)) != 0) {
+        printf("got to A\n");
+        goto fail;
     }
+    tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+    if (likely(cpu->tlb_write[tlb_idx].vaddr == (addr & ~(PG_MASK & ~((unit_size) - 1))))) {
+        printf("got to B\n");
+        if (unit_size == 1) {
+            *(uint8_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
+            printf("got to C\n");
+            size_log2 = 3;
+        } else if (unit_size == 4) {
+            *(uint32_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
+            printf("got to D\n");
+            size_log2 = 5;
+        } else {
+            size_log2 = 6;
+            printf("got to E\n");
+            *(uint64_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
+        }
+        uint64_t paddr  = cpu->tlb_write_paddr_addend[tlb_idx] + addr;
+        goto fail;
+    }            
+
+    printf("preparing to write val %ld of %ld bytes to addr 0x%lx\n", val, unit_size, addr);
+    if (unit_size < 1 || riscv_cpu_write_memory(cpu, addr, val, size_log2)) {
+fail:
+        printf("write failed\n");
+        char response[] = "E 1";  // write failed
+        send_rsp_pkt_to_gdb(response, strlen(response));
+        return;
+    }
+
+    /*bool *fail;
+    if (unit_size == 1)
+        riscv_phys_write_u8(cpu, addr, val, fail);
+    else if (unit_size == 4)
+        riscv_phys_write_u32(cpu, addr, val, fail);
+    else if (unit_size == 8)
+        riscv_phys_write_u64(cpu, addr, val, fail);*/
 
     char ok_resp[] = "OK";
     send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
@@ -684,8 +737,9 @@ void gdb_stub(RISCVMachine *m, int port_num) {
     }
 
     /* no debug symbols to be found in bootrom, so we manually skip it */
-    for (int i = 0; i < 10; i++)
-        virt_machine_run(gdb_m, 0);
+    for (int i = 0; i < gdb_m->ncpus; i++)
+        while (virt_machine_get_pc(gdb_m, i) != RAM_BASE_ADDR)
+            virt_machine_run(gdb_m, i);
     /* should start at DRAM base addr now */
 
     while (true) {
