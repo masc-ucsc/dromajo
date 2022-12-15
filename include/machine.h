@@ -250,7 +250,7 @@ BlockDevice *block_device_init_http(const char *url, int max_cache_size_kb, void
 #ifdef __cplusplus
 extern "C" {
 #endif
-RISCVMachine *virt_machine_main(int argc, char **argv);
+RISCVMachine *virt_machine_main(int argc, char *argv[]);
 void          virt_machine_end(RISCVMachine *s);
 void          virt_machine_serialize(RISCVMachine *m, const char *dump_name);
 void          virt_machine_deserialize(RISCVMachine *m, const char *dump_name);

@@ -610,7 +610,7 @@ static bool load_elf_and_fake_the_config(VirtMachineParams *p, const char *path)
     return false;
 }
 
-RISCVMachine *virt_machine_main(int argc, char **argv) {
+RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *prog                     = argv[0];
     char *      snapshot_load_name       = 0;
     char *      snapshot_save_name       = 0;
