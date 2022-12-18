@@ -615,6 +615,12 @@ void handle_rsp_X(const char *buf, const size_t buf_len) {
     uint64_t unit_size = 2;
     uint64_t val       = 0;
 
+    if (!CONFIG_ALLOW_MISALIGNED_ACCESS && (addr & (unit_size - 1)) != 0) {
+        char response[] = "E 1";  // write failed
+        send_rsp_pkt_to_gdb(response, strlen(response));
+        return;
+    }
+
     for (uint64_t pos = 0; pos < buf_len; ++pos)
         if (buf[pos] == ',')
             unit_size = strtoul(&buf[pos + 1], NULL, 16);
@@ -622,16 +628,6 @@ void handle_rsp_X(const char *buf, const size_t buf_len) {
             memcpy(&val, &buf[pos+1], unit_size);
             break;
         }
-
-    /*PhysMemoryRange *pr = get_phys_mem_range(cpu->mem_map, addr);
-    if (unit_size < 1 || !pr) {
-        printf("invalid size/addr request \n");
-        char response[] = "E 1";  // invalid size/addr request
-        send_rsp_pkt_to_gdb(response, strlen(response));
-        return;
-    }*/
-    
-    
 
     int size_log2;
     if (unit_size == 1)
@@ -641,47 +637,20 @@ void handle_rsp_X(const char *buf, const size_t buf_len) {
     else
         size_log2 = 6;
 
-    uint32_t tlb_idx;
-    if (!CONFIG_ALLOW_MISALIGNED_ACCESS && (addr & (unit_size - 1)) != 0) {
-        printf("got to A\n");
-        goto fail;
-    }
-    tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+    uint32_t tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
     if (likely(cpu->tlb_write[tlb_idx].vaddr == (addr & ~(PG_MASK & ~((unit_size) - 1))))) {
-        printf("got to B\n");
         if (unit_size == 1) {
             *(uint8_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
-            printf("got to C\n");
-            size_log2 = 3;
         } else if (unit_size == 4) {
             *(uint32_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
-            printf("got to D\n");
-            size_log2 = 5;
         } else {
-            size_log2 = 6;
-            printf("got to E\n");
             *(uint64_t *)(cpu->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;
         }
-        uint64_t paddr  = cpu->tlb_write_paddr_addend[tlb_idx] + addr;
-        goto fail;
-    }            
-
-    printf("preparing to write val %ld of %ld bytes to addr 0x%lx\n", val, unit_size, addr);
-    if (unit_size < 1 || riscv_cpu_write_memory(cpu, addr, val, size_log2)) {
-fail:
-        printf("write failed\n");
+    } else {
         char response[] = "E 1";  // write failed
         send_rsp_pkt_to_gdb(response, strlen(response));
         return;
     }
-
-    /*bool *fail;
-    if (unit_size == 1)
-        riscv_phys_write_u8(cpu, addr, val, fail);
-    else if (unit_size == 4)
-        riscv_phys_write_u32(cpu, addr, val, fail);
-    else if (unit_size == 8)
-        riscv_phys_write_u64(cpu, addr, val, fail);*/
 
     char ok_resp[] = "OK";
     send_rsp_pkt_to_gdb(ok_resp, strlen(ok_resp));
