@@ -53,6 +53,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include "dromajo.h"
 #ifndef __APPLE__
@@ -489,10 +490,10 @@ static EthernetDevice *slirp_open(void) {
 
 #endif /* CONFIG_SLIRP */
 
-BOOL virt_machine_run(RISCVMachine *s, int hartid) {
+BOOL virt_machine_run(RISCVMachine *s, int hartid, int n_cycles) {
     (void)virt_machine_get_sleep_duration(s, hartid, MAX_SLEEP_TIME);
 
-    riscv_cpu_interp64(s->cpu_state[hartid], 1);
+    riscv_cpu_interp64(s->cpu_state[hartid], n_cycles);
     RISCVCPUState *cpu = s->cpu_state[hartid];
     if (s->htif_tohost_addr) {
         uint32_t tohost;
@@ -593,13 +594,13 @@ static bool load_elf_and_fake_the_config(VirtMachineParams *p, const char *path)
     uint8_t *buf;
     int      buf_len = load_file(&buf, path);
 
-    if (elf64_is_riscv64(buf, buf_len)) {
+    if (elf64_is_riscv64(buf, buf_len) || isxdigit(buf[0]) && isxdigit(buf[1])) {
         /* Fake the corresponding config file */
         p->files[VM_FILE_BIOS].filename = strdup(path);
         p->files[VM_FILE_BIOS].buf      = buf;
         p->files[VM_FILE_BIOS].len      = buf_len;
         p->ram_size                     = (size_t)256 << 20;  // Default to 256 MiB
-        p->ram_base_addr                = elf64_get_entrypoint(buf);
+        p->ram_base_addr                = RAM_BASE_ADDR;
         elf64_find_global(buf, buf_len, "tohost", &p->htif_base_addr);
 
         return true;
@@ -637,6 +638,8 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
 #ifdef LIVECACHE
     uint64_t    live_cache_size          = 8*1024*1024;
 #endif
+    bool        elf_based                = false;
+    bool        allow_ctrlc              = false;
 
     dromajo_stdout = stdout;
     dromajo_stderr = stderr;
@@ -667,6 +670,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             {"custom_extension",              no_argument, 0,  'u' }, // CFG
             {"clear_ids",                     no_argument, 0,  'L' }, // CFG
             {"gdbinit",                     required_argument, 0,  'G' }, // CFG
+            {"ctrlc",                         no_argument, 0,  'X' },
 #ifdef LIVECACHE
             {"live_cache_size",         required_argument, 0,  'w' }, // CFG
 #endif
@@ -679,6 +683,9 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             break;
 
         switch (c) {
+            case 'X':
+                allow_ctrlc = true;
+                break;
             case 'c':
                 if (cmdline)
                     usage(prog, "already had a kernel command line");
@@ -837,8 +844,10 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     else
         path = argv[optind++];
 
+/*
     if (optind < argc)
         usage(prog, "too many arguments");
+*/
 
     assert(path);
     BlockDeviceModeEnum drive_mode = BF_MODE_SNAPSHOT;
@@ -849,8 +858,11 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     fs_wget_init();
 #endif
 
-    if (!load_elf_and_fake_the_config(p, path))
+    if (!load_elf_and_fake_the_config(p, path)) {
         virt_machine_load_config_file(p, path, NULL, NULL);
+    } else {
+        elf_based = true;
+    }
 
     if (p->logfile) {
         FILE *log_out = fopen(p->logfile, "w");
@@ -952,7 +964,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
         }
     }
 
-    p->console       = console_init(TRUE, stdin, dromajo_stdout);
+    p->console       = console_init(allow_ctrlc, stdin, dromajo_stdout);
     p->dump_memories = dump_memories;
 
     // Setup bootrom params
@@ -990,6 +1002,24 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     // LiveCache (should be ~2x larger than real LLC)
     s->llc = new LiveCache("LiveCache", live_cache_size, p->ram_base_addr, p->ram_size);
 #endif
+
+    if (elf_based) {
+        for (int j = 0, i = optind - 1; i < argc; ++i, ++j) {
+            uint8_t *buf;
+            int      buf_len = load_file(&buf, argv[i]);
+
+            if (elf64_is_riscv64(buf, buf_len)) {
+                load_elf_image(s, buf, buf_len);
+            } else
+                load_hex_image(s, buf, buf_len);
+        }
+        for (int i = 0; i < (int)p->ncpus; ++i)
+            s->cpu_state[i]->debug_mode = true;
+    } else {
+        s  = virt_machine_load(p, s);
+        if (!s)
+            return NULL;
+    }
 
     // Overwrite the value specified in the configuration file
     if (snapshot_load_name) {
