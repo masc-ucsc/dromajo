@@ -1,0 +1,39 @@
+
+
+#benchmarks=("gcc" "astar" "bzip2" "gobmk" "h264ref" "hmmer" "libquantum" "omnetpp" "perlbench" "sjeng" "xalanc")
+
+benchmarks=("astar" "gcc" "gobmk" "h264ref" "perlbench")
+
+old_benchmark="xalanc"
+
+for benchmark in ${benchmarks[@]}; do
+  echo "********************************************** $benchmark ********************************************"
+  #cp -rf boot.cfg simpoint_data/spec06_$benchmark/boot.cfg
+  
+  
+  #cp -rf Image simpoint_data/spec06_$benchmark/
+  #cp -rf fw_jump.bin simpoint_data/spec06_$benchmark/
+  #cp -rf rootfs.cpio simpoint_data/spec06_$benchmark/
+  
+  #sed -i "s/$old_benchmark/$benchmark/g" boot.cfg
+  #echo "`grep -r -n $benchmark boot.cfg`"
+  #old_benchmark=$benchmark
+  
+  #cat simpoint_data/spec06_$benchmark/simpoints
+  
+  sed -i "s/$old_benchmark/$benchmark/g" boot.cfg
+   cp -rf simpoint_data/spec06_$benchmark/simpoints .
+   cp -rf simpoint_data/spec06_$benchmark/weights .
+   cp -rf simpoint_data/spec06_$benchmark/dromajo_simpoint.bb .
+   echo "******************* Generating sp files ***********************"
+  ../build/dromajo --simpoint=simpoints boot.cfg
+  echo "******************* Moving files ***********************"
+  mv weights simpoint_data/spec06_$benchmark/
+  mv simpoints simpoint_data/spec06_$benchmark/
+  mv sp* simpoint_data/spec06_$benchmark/
+  mv dromajo_simpoint.bb simpoint_data/spec06_$benchmark/
+  		
+  old_benchmark=$benchmark
+  echo "******************* old_benchmark = $old_benchmark ***********************"
+  
+done

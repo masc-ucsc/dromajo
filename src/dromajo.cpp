@@ -32,12 +32,14 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <unordered_map>
 
 //#define REGRESS_COSIM 1
 #ifdef REGRESS_COSIM
 #include "dromajo_cosim.h"
 #endif
 
+#define SIMPOINT_BB
 #define BRANCHPROF
 #ifdef BRANCHPROF
         FILE* pc_trace;
@@ -315,7 +317,7 @@ int main(int argc, char **argv) {
     if (port_num)
       gdb_stub(m, port_num);
 
-#ifdef SIMPOINT_BBhartid
+#ifdef SIMPOINT_BB
     if (m->common.simpoints.empty()) {
         simpoint_bb_file = fopen("dromajo_simpoint.bb", "w");
         if (simpoint_bb_file == nullptr) {

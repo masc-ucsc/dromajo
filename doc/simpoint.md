@@ -32,19 +32,19 @@ Copy the binary and inputs sets XXX to the buildroot target directory. Make
 sure that S50bench has an option for your new benchmark.
 
 ```
-riscv64-linux-gnu-gcc -Wall -Os -static roi.c -o buildroot-2020.05.1/output/target/sbin/roi
+riscv64-linux-gnu-gcc -Wall -Os -static roi.c -o buildroot/output/target/sbin/roi
 
-cp -f S50bench buildroot-2020.05.1/output/target/etc/init.d/
+cp -f S50bench buildroot/output/target/etc/init.d/
 
-mkdir buildroot-2020.05.1/output/target/bench
+mkdir buildroot/output/target/bench
 cp XXXX buildroot-2020.05.1/output/target/bench
 ```
 
 Afterwards rebuild the buildroot, and copy the rootfs.cpio
 
 ```
-make -j16 -C buildroot-2020.05.1
-cp buildroot-2020.05.1/output/images/rootfs.cpio .
+make -j16 -C buildroot
+cp buildroot/output/images/rootfs.cpio .
 ```
 
 Edit the boot.cfg to specify the benchmark to run. For example, to run

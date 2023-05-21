@@ -78,8 +78,8 @@ extern int roi_region;
 #ifdef SIMPOINT_BB
 
 //#define SIMPOINT_SIZE 1000000UL      // For Benchmarking Fine Grain
-//#define SIMPOINT_SIZE 10000UL        // For verification
-#define SIMPOINT_SIZE 100000000UL  // Traditional 100M simpoint
+#define SIMPOINT_SIZE 10000UL        // For verification
+//#define SIMPOINT_SIZE 100000000UL  // Traditional 100M simpoint
 #endif
 
 typedef enum {

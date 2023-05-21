@@ -1,0 +1,63 @@
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_bzip2/sp0 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_bzip2/sp2 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_bzip2/sp4 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_bzip2/sp5 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_bzip2/sp9 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_bzip2/
+
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_gcc/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_gcc/sp12 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_gcc/
+ 
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_gobmk/sp8 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_gobmk/
+ 
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_hmmer/sp0 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_hmmer/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_hmmer/sp2 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_hmmer/sp3 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_hmmer/sp6 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_hmmer/
+
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_libquantum/sp0 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_libquantum/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_libquantum/sp2 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_libquantum/sp4 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_libquantum/sp6 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_libquantum/
+ 
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp0 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp2 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp4 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp6 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp10 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_omnetpp/sp12 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_omnetpp/
+ 
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp0 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp5 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp6 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp7 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp9 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_sjeng/sp14 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_sjeng/
+ 
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp1 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp4 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp6 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp8 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp9 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp10 --maxinsn=1000000 ./boot.cfg
+../../../superbp/bazel-bin/emulator/emulator --load=simpoint_data/spec06_xalanc/sp11 --maxinsn=1000000 ./boot.cfg
+cat pc_trace.txt 
+mv pc_trace.txt simpoint_data/spec06_xalanc/
+
