@@ -213,7 +213,11 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
     }
 
     r->common.maxinsns--;
-
+    
+    if (r->common.skip_insns > 0) {
+        r->common.skip_insns--;
+    }
+    
     if (riscv_terminated(s)) {
         return 1;
     }

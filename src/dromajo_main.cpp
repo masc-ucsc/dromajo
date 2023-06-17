@@ -559,6 +559,7 @@ static void usage(const char *prog, const char *msg) {
             "       --simpoint reads a simpoint file to create multiple checkpoints\n"
             "       --save saves a snapshot upon exit\n"
             "       --maxinsns terminates execution after a number of instructions\n"
+            "       --skip_insns starts benchmark data collection after a number of instructions\n"
             "       --terminate-event name of the validate event to terminate execution\n"
             "       --trace start trace dump after a number of instructions. Trace disabled by default\n"
             "       --ignore_sbi_shutdown continue simulation even upon seeing the SBI_SHUTDOWN call\n"
@@ -619,6 +620,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *cmdline                  = NULL;
     long        ncpus                    = 0;
     uint64_t    maxinsns                 = 0;
+    uint64_t 	skip_insns				 = 0;
     uint64_t    trace                    = UINT64_MAX;
     long        memory_size_override     = 0;
     uint64_t    memory_addr_override     = 0;
@@ -656,6 +658,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             {"save",                    required_argument, 0,  's' },
             {"simpoint",                required_argument, 0,  'S' },
             {"maxinsns",                required_argument, 0,  'm' }, // CFG
+            {"skip_insns",              required_argument, 0,  'z' }, // CFG
             {"trace   ",                required_argument, 0,  't' },
             {"ignore_sbi_shutdown",     required_argument, 0,  'P' }, // CFG
             {"dump_memories",                 no_argument, 0,  'D' }, // CFG
@@ -728,6 +731,21 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
                         maxinsns *= 1000000;
                     else if (last == 'g' || last == 'G')
                         maxinsns *= 1000000000;
+                }
+                break;
+                
+            case 'z':
+                if (skip_insns)
+                    usage(prog, "already had a skip instructions");
+                skip_insns = (uint64_t)atoll(optarg);
+                {
+                    char last = optarg[strlen(optarg) - 1];
+                    if (last == 'k' || last == 'K')
+                        skip_insns *= 1000;
+                    else if (last == 'm' || last == 'M')
+                        skip_insns *= 1000000;
+                    else if (last == 'g' || last == 'G')
+                        skip_insns *= 1000000000;
                 }
                 break;
 
@@ -1068,6 +1086,10 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     // specified in the configuration file
     if (maxinsns > 0) {
         s->common.maxinsns = maxinsns;
+    }
+    
+    if (skip_insns > 0) {
+        s->common.skip_insns = skip_insns;
     }
 
     // If not value is specified in the configuration or the command line

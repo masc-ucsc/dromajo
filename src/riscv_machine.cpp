@@ -1161,6 +1161,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     s->mem_map->opaque                = s;
     s->mem_map->flush_tlb_write_range = riscv_flush_tlb_write_range;
     s->common.maxinsns                = p->maxinsns;
+    s->common.skip_insns              = p->skip_insns;
     s->common.snapshot_load_name      = p->snapshot_load_name;
 
     /* loggers are changed using install_new_loggers() in dromajo_cosim */

@@ -194,6 +194,15 @@ int simpoint_step(RISCVMachine *m, int hartid) {
 
 static int iterate_core(RISCVMachine *m, int hartid, int n_cycles) {
     m->common.maxinsns -= n_cycles;
+    
+    if ((m->common.skip_insns - n_cycles) > 0)
+    {
+    	m->common.skip_insns -= n_cycles;
+    }
+    else // Check if this is the correct behavior for n_cycles > 1, or some handling is required 
+    {
+    	m->common.skip_insns = 0;
+    }
 
     if (m->common.maxinsns <= 0)
         /* Succeed after N instructions without failure. */

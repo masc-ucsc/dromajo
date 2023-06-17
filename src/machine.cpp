@@ -184,6 +184,7 @@ static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str
     char        buf1[256];
     JSONValue   cfg, obj, el;
     p->maxinsns      = 0;
+    p->skip_insns    = 0;
     p->dump_memories = false;
 
     cfg = json_parse_value_len(config_file_str, len);
@@ -234,6 +235,7 @@ static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str
 
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);
     vm_get_uint64_opt(cfg, "maxinsns", &p->maxinsns);
+    vm_get_uint64_opt(cfg, "skip_insns", &p->skip_insns);
 
     if (vm_get_str_opt(cfg, "load", &p->snapshot_load_name) < 0)
         goto tag_fail;
