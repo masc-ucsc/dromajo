@@ -722,7 +722,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             case 'm':
                 if (maxinsns)
                     usage(prog, "already had a max instructions");
-                maxinsns = (uint64_t)atoll(optarg);
+                maxinsns = (int64_t)atoll(optarg);
                 {
                     char last = optarg[strlen(optarg) - 1];
                     if (last == 'k' || last == 'K')
@@ -1095,7 +1095,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     // If not value is specified in the configuration or the command line
     // then run indefinitely
     if (s->common.maxinsns == 0)
-        s->common.maxinsns = UINT64_MAX;
+        s->common.maxinsns = INT64_MAX;
 
     for (int i = 0; i < s->ncpus; ++i) s->cpu_state[i]->ignore_sbi_shutdown = ignore_sbi_shutdown;
 

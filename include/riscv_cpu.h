@@ -49,7 +49,7 @@ typedef struct RISCVCPUState RISCVCPUState;
 #define ROM_SIZE       0x00002000
 #define ROM_CODE_SIZE  0x00000B00
 #define ROM_BASE_ADDR  0x00010000
-#define BOOT_BASE_ADDR 0x00010000
+#define BOOT_BASE_ADDR 0x00010040
 
 // The default RAM base, can be relocated with config "memory_base_addr"
 #define RAM_BASE_ADDR 0x80000000
@@ -379,7 +379,11 @@ void riscv_set_debug_mode(RISCVCPUState *s, bool on);
 int riscv_benchmark_exit_code(RISCVCPUState *s);
 
 #include "riscv_machine.h"
+void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s, const uint64_t clint_base_addr);
+void create_boot_rom_image(uint32_t *rom, uint32_t rom_size_bytes, const char *file_name);
+void riscv_ram_serialize(RISCVCPUState *s, const char *dump_name);
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr);
+void riscv_ram_deserialize(RISCVCPUState *s, const char *dump_name);
 void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name);
 
 int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_ulong addr, int size_log2);

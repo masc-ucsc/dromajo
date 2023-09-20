@@ -39,8 +39,8 @@
 #include "dromajo_cosim.h"
 #endif
 
-#define SIMPOINT_BB
-#define BRANCHPROF
+//#define SIMPOINT_BB
+//#define BRANCHPROF
 #ifdef BRANCHPROF
         FILE* pc_trace;
         
@@ -351,7 +351,7 @@ int main(int argc, char **argv) {
     
 #endif
 
-    int n_cycles = 10000;
+    int n_cycles = 1;
     execution_start_ts = get_current_time_in_seconds();
     execution_progress_meassure = &m->cpu_state[0]->minstret;
     signal(SIGINT, sigintr_handler);

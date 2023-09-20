@@ -2359,10 +2359,28 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
     if (f_fd < 0)
         err(-3, "trying to read %s", file);
 
-    size_t sz = read(f_fd, base, size);
+    size_t read_size = 0;
+    uint8_t *ptr = (uint8_t *)base;
+    int64_t pending_size = size;
+    do {
+        /* Linux reads in 2GB chunks at most. */
+        size_t sz = read(f_fd, &ptr[read_size], pending_size);
+        if (sz <= 0) {
+            err(-3, "%s %zd size failed to read memory size %zd", file, sz, size);
+            break;
+        }
 
-    if (sz <0 || sz > size)
-        err(-3, "%s %zd size does not fit in memory size %zd", file, sz, size);
+        if (sz <0 || sz > size) {
+            err(-3, "%s %zd size does not fit in memory size %zd", file, sz, size);
+            break;
+        }
+
+        read_size += sz;
+        pending_size -= sz;
+    } while(pending_size > 0);
+
+    if (read_size != size)
+        err(-3, "%s %zd size does not match memory size %zd", file, read_size, size);
 
     close(f_fd);
 }
@@ -2475,12 +2493,11 @@ static uint32_t create_auipc(int rd, uint32_t addr) {
     return 0x17 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
 }
 
-/*
- * Might use it one day, but GCC doesn't like unused static functions
- * static uint32_t create_lui(int rd, uint32_t addr) {
- *     return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
- * }
- */
+#ifdef LIVECACHE
+static uint32_t create_lui(int rd, uint32_t addr) {
+    return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
+}
+#endif
 
 static uint32_t create_addi(int rd, uint32_t addr) {
     uint32_t pos = addr & 0xFFF;
@@ -2625,22 +2642,9 @@ static void create_hang_nonzero_hart(uint32_t *rom, uint32_t *code_pos, uint32_t
                                       // 1:
 }
 
-static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t clint_base_addr) {
-    assert(ROM_SIZE>=(ROM_CODE_SIZE+512)); // minimum of 512bytes per core of data size
-    uint32_t rom[ROM_SIZE / 4];
-    memset(rom, 0, sizeof rom);
-
-    // ROM organization
-    // 0000..003F wasted
-    // 0040..0AFF boot code (2,752 B)
-    // 0B00..0FFF boot data (  512 B)
-
-    uint32_t code_pos       = (BOOT_BASE_ADDR - ROM_BASE_ADDR) / sizeof *rom;
-    uint32_t data_pos       = ROM_CODE_SIZE/sizeof *rom;
+void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s, const uint64_t clint_base_addr) {
+    /* Remember the start position for boundry checks. */
     uint32_t data_pos_start = data_pos;
-
-    if (s->machine->ncpus == 1)  // FIXME: May be interesting to freeze hartid >= ncpus
-        create_hang_nonzero_hart(rom, &code_pos, &data_pos);
 
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x7b1, s->pc);  // Write to DPC (CSR, 0x7b1)
 
@@ -2773,7 +2777,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     // dret 0x7b200073
     rom[code_pos++] = 0x7b200073;
 
-    if (sizeof rom / sizeof *rom <= data_pos || data_pos_start <= code_pos) {
+    if (rom_size <= data_pos || data_pos_start <= code_pos) {
         fprintf(dromajo_stderr,
                 "ERROR: ROM is too small. ROM_SIZE should increase.  "
                 "Current %dbytes for code and %dbytes for data\n",
@@ -2782,7 +2786,32 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
         exit(-6);
     }
 
-    serialize_memory(rom, ROM_SIZE, file);
+}
+
+void create_boot_rom_image(uint32_t *rom, uint32_t rom_size_bytes, const char *file_name) {
+    // Write ROM.
+    serialize_memory(rom, rom_size_bytes, file_name);
+}
+
+void riscv_ram_serialize(RISCVCPUState *s, const char *dump_name) {
+    bool is_ram_found = false;
+    for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
+        PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
+        if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
+            assert(!is_ram_found);
+            is_ram_found = true;
+
+            char *f_name = (char *)alloca(strlen(dump_name) + 64);
+            sprintf(f_name, "%s.mainram", dump_name);
+
+            serialize_memory(pr->phys_mem, pr->size, f_name);
+        }
+    }
+
+    if (!is_ram_found) {
+        fprintf(dromajo_stderr, "ERROR: could not find main RAM.\n");
+        exit(-3);
+    }
 }
 
 static void init_mem_loc_t(mem_loc_t *mem_loc, int size)
@@ -2854,67 +2883,18 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
 
     for (int i = 0; i < 4; i += 2) fprintf(conf_fd, "pmpcfg%d:%llx\n", i, (unsigned long long)s->csr_pmpcfg[i]);
     for (int i = 0; i < 16; ++i) fprintf(conf_fd, "pmpaddr%d:%llx\n", i, (unsigned long long)s->csr_pmpaddr[i]);
+}
 
-    PhysMemoryRange *boot_ram       = 0;
-    int              main_ram_found = 0;
-    int              num_ram        = 0;
-    mem_loc_t mem_loc[s->mem_map->n_phys_mem_range];
-    init_mem_loc_t(mem_loc, s->mem_map->n_phys_mem_range);
-
+void riscv_ram_deserialize(RISCVCPUState *s, const char *dump_name) {
     for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
         PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
-        fprintf(conf_fd, "mrange%d:0x%llx 0x%llx %s\n", i, (long long)pr->addr, (long long)pr->size, pr->is_ram ? "ram" : "io");
+        if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
+            size_t n         = strlen(dump_name) + 64;
+            char * main_name = (char *)alloca(n);
+            snprintf(main_name, n, "%s.mainram", dump_name);
 
-        if (pr->is_ram && pr->addr == ROM_BASE_ADDR) {
-            assert(!boot_ram);
-            boot_ram = pr;
-
-        } else if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
-            assert(!main_ram_found);
-            main_ram_found = 1;
-
-            //char *f_name = (char *)alloca(strlen(dump_name) + 64);
-            //sprintf(f_name, "%s.mainram", dump_name);
-
-            //serialize_memory(pr->phys_mem, pr->size, f_name);
+            deserialize_memory(pr->phys_mem, pr->size, main_name);
         }
-        if(pr->is_ram && pr->addr >= s->machine->ram_base_addr)
-        {
-            mem_loc[i].diff = pr->addr - s->machine->ram_base_addr;
-            mem_loc[i].is_ram = true;
-            mem_loc[i].act_loc = i;
-            num_ram++;
-        }
-    }
-
-    if(main_ram_found)
-    {
-        char *f_name = (char *)alloca(strlen(dump_name) + 64);
-        sprintf(f_name, "%s.mainram", dump_name);
-        dump_mainram(s, mem_loc, num_ram, f_name);
-    }
-
-    if (!boot_ram || !main_ram_found) {
-        fprintf(dromajo_stderr, "ERROR: could not find boot and main ram???\n");
-        exit(-3);
-    }
-
-    n            = strlen(dump_name) + 64;
-    char *f_name = (char *)alloca(n);
-    snprintf(f_name, n, "%s.bootram", dump_name);
-
-    if (s->priv != 3 || ROM_BASE_ADDR + ROM_SIZE < s->pc) {
-        fprintf(dromajo_stderr, "NOTE: creating a new boot rom\n");
-        create_boot_rom(s, f_name, clint_base_addr);
-    } else if (BOOT_BASE_ADDR < s->pc) {
-        fprintf(dromajo_stderr, "ERROR: could not checkpoint when running inside the ROM\n");
-        exit(-4);
-    } else if (s->pc == BOOT_BASE_ADDR && boot_ram) {
-        fprintf(dromajo_stderr, "NOTE: using the default dromajo ROM\n");
-        serialize_memory(boot_ram->phys_mem, boot_ram->size, f_name);
-    } else {
-        fprintf(dromajo_stderr, "ERROR: unexpected PC address 0x%llx\n", (long long)s->pc);
-        exit(-4);
     }
 }
 
@@ -2928,13 +2908,6 @@ void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name) {
             snprintf(boot_name, n, "%s.bootram", dump_name);
 
             deserialize_memory(pr->phys_mem, pr->size, boot_name);
-
-        } else if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
-            size_t n         = strlen(dump_name) + 64;
-            char * main_name = (char *)alloca(n);
-            snprintf(main_name, n, "%s.mainram", dump_name);
-
-            deserialize_memory(pr->phys_mem, pr->size, main_name);
         }
     }
 }

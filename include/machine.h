@@ -152,8 +152,8 @@ typedef struct {
 
     /* maximum increment of instructions to execute */
     /* For superbp, this is the number of instructions from the benchmark to be run and benchmarked */
-    uint64_t maxinsns;
-    
+    int64_t maxinsns;
+
     /* For superbp, this is the number of instructions to be skipped, for others it may be appropriately defined/ interpreted */
     uint64_t skip_insns;
 
@@ -207,7 +207,7 @@ typedef struct VirtMachine {
     char *   snapshot_load_name;
     char *   snapshot_save_name;
     char *   terminate_event;
-    uint64_t maxinsns;
+    int64_t  maxinsns;
     uint64_t skip_insns;
     uint64_t trace;
 
