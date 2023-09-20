@@ -299,3 +299,128 @@ Starting network: OK
 Welcome to Dromajo Buildroot
 buildroot login:
 ```
+
+### Multicore checkpoints
+
+This is a sample of execution booting a 2 core Linux, running for 8B instructions. Then re-loading the multicore checkpoint and continuing the execution correctly.
+
+```
+ ./dromajo --maxinsn 80000000 --save mc2 --ncpus 2 ./boot.cfg
+
+OpenSBI v0.8
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name       : ucbbar,dromajo-bare
+Platform Features   : timer,mfdeleg
+Platform HART Count : 2
+Boot HART ID        : 0
+Boot HART ISA       : rv64imafdcvsu
+BOOT HART Features  : pmp,scounteren,mcounteren
+BOOT HART PMP Count : 16
+Firmware Base       : 0x80000000
+Firmware Size       : 100 KB
+Runtime SBI Version : 0.2
+
+MIDELEG : 0x0000000000000222
+MEDELEG : 0x000000000000b109
+PMP0    : 0x0000000080000000-0x000000008001ffff (A)
+PMP1    : 0x0000000000000000-0x000001ffffffffff (A,R,W,X)
+[    0.000000] OF: fdt: Ignoring memory range 0x80000000 - 0x80200000
+[    0.000000] Linux version 5.8.0-rc4 (renau@mada4) (riscv64-linux-gnu-gcc (Debian 9.2.1-21) 9.2.1 20191130, GNU ld (GNU Binutils for Debian) 2.34) #1 SMP Sat Jul 11 10:42:26 PDT 2020
+[    0.000000] earlycon: sbi0 at I/O port 0x0 (options '')
+[    0.000000] printk: bootconsole [sbi0] enabled
+[    0.000000] Initial ramdisk at: 0x(____ptrval____) (7540736 bytes)
+[    0.000000] Zone ranges:
+[    0.000000]   DMA32    [mem 0x0000000080200000-0x00000000bfffffff]
+[    0.000000]   Normal   empty
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000080200000-0x00000000bfffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000080200000-0x00000000bfffffff]
+[    0.000000] software IO TLB: mapped [mem 0xbaacb000-0xbeacb000] (64MB)
+[    0.000000] SBI specification v0.2 detected
+[    0.000000] SBI implementation ID=0x1 Version=0x8
+[    0.000000] SBI v0.2 TIME extension detected
+[    0.000000] SBI v0.2 IPI extension detected
+[    0.000000] SBI v0.2 RFENCE extension detected
+[    0.000000] SBI v0.2 HSM extension detected
+[    0.000000] riscv: ISA extensions acdfimsuv
+[    0.000000] riscv: ELF capabilities acdfim
+[    0.000000] percpu: Embedded 17 pages/cpu s31976 r8192 d29464 u69632
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 258055
+[    0.000000] Kernel command line: root=/dev/ram rw earlycon=sbi console=hvc0
+[    0.000000] Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.000000] Sorting __ex_table...
+[    0.000000] mem auto-init: stack:off, heap alloc:off, heap free:off
+[    0.000000] Memory: 940068K/1046528K available (6405K kernel code, 4273K rwdata, 4096K rodata, 235K init, 317K bss, 106460K reserved, 0K cma-reserved)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]       fixmap : 0xffffffcefee00000 - 0xffffffceff000000   (2048 kB)
+[    0.000000]       pci io : 0xffffffceff000000 - 0xffffffcf00000000   (  16 MB)
+[    0.000000]      vmemmap : 0xffffffcf00000000 - 0xffffffcfffffffff   (4095 MB)
+[    0.000000]      vmalloc : 0xffffffd000000000 - 0xffffffdfffffffff   (65535 MB)
+[    0.000000]       lowmem : 0xffffffe000000000 - 0xffffffe03fe00000   (1022 MB)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=8 to nr_cpu_ids=2.
+[    0.000000] rcu: 	RCU debug extended QS entry/exit.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=2
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] riscv-intc: 64 local interrupts mapped
+[    0.000000] plic: plic@10000000: mapped 31 interrupts with 2 handlers for 4 contexts.
+[    0.000000] riscv_timer_init_dt: Registering clocksource cpuid [0] hartid [0]
+[    0.000000] clocksource: riscv_clocksource: mask: 0xffffffffffffffff max_cycles: 0x1d854df40, max_idle_ns: 3526361616960 ns
+[    0.000002] sched_clock: 64 bits at 1000kHz, resolution 1000ns, wraps every 2199023255500ns
+[    0.000067] Console: colour dummy device 80x25
+[    0.000088] printk: console [hvc0] enabled
+[    0.000088] printk: console [hvc0] enabled
+[    0.000122] printk: bootconsole [sbi0] disabled
+[    0.000122] printk: bootconsole [sbi0] disabled
+[    0.000164] Calibrating delay loop (skipped), value calculated using timer frequency.. 2.00 BogoMIPS (lpj=4000)
+[    0.000208] pid_max: default: 32768 minimum: 301
+[    0.000276] Mount-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.000310] Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.000674] rcu: Hierarchical SRCU implementation.
+[    0.000787] smp: Bringing up secondary CPUs ...
+[    0.000936] smp: Brought up 1 node, 2 CPUs
+[    0.001053] devtmpfs: initialized
+[    0.001290] random: get_random_u32 called from bucket_table_alloc.isra.0+0x4e/0x154 with crng_init=0
+[    0.001371] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.001451] futex hash table entries: 512 (order: 3, 32768 bytes, linear)
+[    0.001579] NET: Registered protocol family 16
+```
+
+This creates 2 files: mc2.bootrom and mc2.mainram. The bootrom restores the plic/clint and each of the core states.
+
+
+```
+ ./dromajo --maxinsn 80000000 --load mc2 --ncpus 2 ./boot.cfg
+[    0.005498] vgaarb: loaded
+[    0.005594] SCSI subsystem initialized
+[    0.005693] usbcore: registered new interface driver usbfs
+[    0.005729] usbcore: registered new interface driver hub
+[    0.005763] usbcore: registered new device driver usb
+[    0.006004] clocksource: Switched to clocksource riscv_clocksource
+[    0.007759] NET: Registered protocol family 2
+[    0.007931] tcp_listen_portaddr_hash hash table entries: 512 (order: 2, 20480 bytes, linear)
+[    0.007978] TCP established hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.008059] TCP bind hash table entries: 8192 (order: 6, 262144 bytes, linear)
+[    0.008209] TCP: Hash tables configured (established 8192 bind 8192)
+[    0.008257] UDP hash table entries: 512 (order: 3, 49152 bytes, linear)
+[    0.008305] UDP-Lite hash table entries: 512 (order: 3, 49152 bytes, linear)
+[    0.008381] NET: Registered protocol family 1
+[    0.008490] RPC: Registered named UNIX socket transport module.
+[    0.008516] RPC: Registered udp transport module.
+[    0.008537] RPC: Registered tcp transport module.
+[    0.008558] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.008587] PCI: CLS 0 bytes, default 64
+[    0.008646] Unpacking initramfs...
+```
