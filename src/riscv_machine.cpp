@@ -1336,6 +1336,10 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     s->common.pending_exception = -1;
     s->common.pending_interrupt = -1;
 
+    /* interrupts and exception setup for cosim */
+    s->common.pending_exception = -1;
+    s->common.pending_interrupt = -1;
+
     /* plic/clint setup */
     s->plic_base_addr  = p->plic_base_addr;
     s->plic_size       = p->plic_size;

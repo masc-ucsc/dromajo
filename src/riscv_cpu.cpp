@@ -2386,12 +2386,11 @@ static uint32_t create_auipc(int rd, uint32_t addr) {
     return 0x17 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
 }
 
-/*
- * Might use it one day, but GCC doesn't like unused static functions
- * static uint32_t create_lui(int rd, uint32_t addr) {
- *     return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
- * }
- */
+#ifdef LIVECACHE
+static uint32_t create_lui(int rd, uint32_t addr) {
+    return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
+}
+#endif
 
 static uint32_t create_addi(int rd, uint32_t addr) {
     uint32_t pos = addr & 0xFFF;
