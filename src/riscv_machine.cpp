@@ -41,6 +41,7 @@
 #include "riscv_machine.h"
 
 #include <assert.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -50,7 +51,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <err.h>
+
 #include <sstream>
 
 #include "cutils.h"
@@ -61,13 +62,13 @@
 
 /* RISCV machine */
 
-//#define DUMP_UART
-//#define DUMP_CLINT
-//#define DUMP_HTIF
-//#define DUMP_PLIC
-//#define DUMP_DTB
+// #define DUMP_UART
+#define DUMP_CLINT
+// #define DUMP_HTIF
+// #define DUMP_PLIC
+// #define DUMP_DTB
 
-//#define USE_SIFIVE_UART
+// #define USE_SIFIVE_UART
 
 enum {
     SIFIVE_UART_TXFIFO = 0,
@@ -376,7 +377,7 @@ static void plic_write(void *opaque, uint32_t offset, uint32_t val, int size_log
         int hartid = addrid / 2;  // PLIC_HART_CONFIG is "MS"
         if (hartid < s->ncpus) {
             // uint32_t wordid = (offset & (PLIC_ENABLE_STRIDE - 1)) >> 2;
-            RISCVCPUState *cpu   = s->cpu_state[hartid];
+            RISCVCPUState *cpu               = s->cpu_state[hartid];
             cpu->plic_enable_irq[addrid % 2] = val;
         }
     } else if (PLIC_CONTEXT_BASE <= offset && offset < PLIC_CONTEXT_BASE + PLIC_CONTEXT_STRIDE * MAX_CPUS) {
@@ -385,7 +386,7 @@ static void plic_write(void *opaque, uint32_t offset, uint32_t val, int size_log
         if (wordid == 0) {
             plic_priority[wordid] = val;
         } else if (wordid == 1) {
-            int irq = val & 31;
+            int      irq  = val & 31;
             uint32_t mask = 1 << irq;
             s->plic_served_irq &= ~mask;
         } else {
@@ -597,7 +598,7 @@ static void fdt_prop_tab_str(FDTState *s, const char *prop_name, ...) {
 
 /* write the FDT to 'dst1'. return the FDT size in bytes */
 int fdt_output(FDTState *s, uint8_t *dst) {
-    struct fdt_header *       h;
+    struct fdt_header        *h;
     struct fdt_reserve_entry *re;
     int                       dt_struct_size;
     int                       dt_strings_size;
@@ -874,7 +875,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 }
 
 void load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_len) {
-    Elf64_Ehdr *      ehdr = (Elf64_Ehdr *)image;
+    Elf64_Ehdr       *ehdr = (Elf64_Ehdr *)image;
     const Elf64_Phdr *ph   = (Elf64_Phdr *)(image + ehdr->e_phoff);
 
     for (int i = 0; i < ehdr->e_phnum; ++i, ++ph)
@@ -901,9 +902,9 @@ void load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len) {
 
     for (;;) {
         long unsigned offset = 0;
-        unsigned data = 0;
+        unsigned      data   = 0;
         if (p[0] == '0' && p[1] == 'x')
-          p += 2;
+            p += 2;
         char *nl = strchr(p, '\n');
         if (nl)
             *nl = 0;
@@ -912,7 +913,7 @@ void load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len) {
             break;
         uint32_t *mem = (uint32_t *)get_ram_ptr(s, offset);
         if (!mem)
-          errx(1, "dromajo: can't load hex file, no memory at 0x%lx", offset);
+            errx(1, "dromajo: can't load hex file, no memory at 0x%lx", offset);
 
         *mem = data;
 
@@ -923,9 +924,9 @@ void load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len) {
 }
 
 static int load_bootrom(RISCVMachine *s, const char *bootrom_name) {
-    uint8_t * ram_ptr  = get_ram_ptr(s, ROM_BASE_ADDR);
+    uint8_t  *ram_ptr  = get_ram_ptr(s, ROM_BASE_ADDR);
     uint32_t *location = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
-    FILE *    f        = fopen(bootrom_name, "rb");
+    FILE     *f        = fopen(bootrom_name, "rb");
 
     if (!f) {
         vm_error("dromajo: %s: %s\n", bootrom_name, strerror(errno));
@@ -940,7 +941,7 @@ static int load_bootrom(RISCVMachine *s, const char *bootrom_name) {
 }
 
 static int generate_bootrom(RISCVMachine *s) {
-    uint8_t * ram_ptr        = get_ram_ptr(s, ROM_BASE_ADDR);
+    uint8_t  *ram_ptr        = get_ram_ptr(s, ROM_BASE_ADDR);
     uint32_t *q              = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
     int32_t   bootromSzBytes = 0;
 
@@ -1428,7 +1429,7 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
     bool is_serializable = true;
     for (int i = 0; i < m->ncpus && is_serializable; ++i) {
         RISCVCPUState *s = m->cpu_state[i];
-        is_serializable = s->priv != 3 || (ROM_BASE_ADDR + (m->ncpus * ROM_SIZE) < s->pc);
+        is_serializable  = s->priv != 3 || (ROM_BASE_ADDR + (m->ncpus * ROM_SIZE) < s->pc);
     }
 
     /* Serialize core states. */
@@ -1448,7 +1449,7 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
 
         /* Generate single boot ROM for all cores. */
         const uint32_t kTotalRomSize = (m->ncpus * ROM_SIZE) / 4;
-        uint32_t rom[kTotalRomSize];
+        uint32_t       rom[kTotalRomSize];
         memset(rom, 0, sizeof(rom));
 
         // ROM organization
@@ -1462,20 +1463,20 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
         // 1B00..0FFF boot data (  512 B)
         // repeats for each core ...
         for (int i = 0; i < m->ncpus; ++i) {
-            RISCVCPUState *s = m->cpu_state[i];
-            uint32_t code_pos = ((i << 12) | (BOOT_BASE_ADDR - ROM_BASE_ADDR)) / sizeof(*rom);
-            uint32_t data_pos = ((i << 12) | 0xB00) / sizeof(*rom);
+            RISCVCPUState *s        = m->cpu_state[i];
+            uint32_t       code_pos = ((i << 12) | (BOOT_BASE_ADDR - ROM_BASE_ADDR)) / sizeof(*rom);
+            uint32_t       data_pos = ((i << 12) | 0xB00) / sizeof(*rom);
 
             /* All cores start by determining the PC they should jump to. */
-            rom[code_pos++] = 0xf1402573; // csrr   a0, mhartid
-            rom[code_pos++] = 0x00c5151b; // slliw  a0, a0, 12
+            rom[code_pos++] = 0xf1402573;  // csrr   a0, mhartid
+            rom[code_pos++] = 0x00c5151b;  // slliw  a0, a0, 12
 
             /* These four instructions must be the last in preamble. */
             /* If other instructions should be added, add them before these four. */
-            rom[code_pos++] = 0x00000597; // auipc   a1, 0x0
-            rom[code_pos++] = 0x0105859b; // addiw a1, a1, 0xc
-            rom[code_pos++] = 0x00b5053b; // addw a0, a0, a1
-            rom[code_pos++] = 0x50067; // jr a0
+            rom[code_pos++] = 0x00000597;  // auipc   a1, 0x0
+            rom[code_pos++] = 0x0105859b;  // addiw a1, a1, 0xc
+            rom[code_pos++] = 0x00b5053b;  // addw a0, a0, a1
+            rom[code_pos++] = 0x50067;     // jr a0
 
             /* Generates and appends recovery code for each core to rom. */
             generate_core_boot_rom(rom, kTotalRomSize, code_pos, data_pos, s, m->clint_base_addr);
@@ -1483,15 +1484,13 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
 
         /* Write generated boot ROM to file. */
         uint32_t name_len = strlen(dump_name) + 64;
-        char *f_name      = (char *)alloca(name_len);
+        char    *f_name   = (char *)alloca(name_len);
         snprintf(f_name, name_len, "%s.bootram", dump_name);
         create_boot_rom_image(rom, 4 * kTotalRomSize, f_name);
 
         /* Write memory state. */
         riscv_ram_serialize(m->cpu_state[0], dump_name);
-    }
-    else
-    {
+    } else {
         fprintf(dromajo_stderr, "ERROR: could not checkpoint. One or more cores running inside the ROM.\n");
         exit(-4);
     }

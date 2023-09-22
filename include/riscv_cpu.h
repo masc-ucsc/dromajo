@@ -60,25 +60,25 @@ typedef struct RISCVCPUState RISCVCPUState;
 #define FLEN 64
 #endif /* !FLEN */
 
-typedef struct mem_loc_t
-{
-    uint64_t    diff;
-    bool        is_ram;
-    int         act_loc;
+typedef struct mem_loc_t {
+    uint64_t diff;
+    bool     is_ram;
+    int      act_loc;
 } mem_loc_var;
 
 static void init_mem_loc_t(mem_loc_t *mem_loc, int size);
 
 static void dump_mainram(RISCVCPUState *s, mem_loc_t *mem_loc, int num_ram, const char *file);
-static void dump_mainram_helper(const void* base, size_t size, bool first, uint64_t ram_base_addr, uint64_t cur_base, const char *file);
+static void dump_mainram_helper(const void *base, size_t size, bool first, uint64_t ram_base_addr, uint64_t cur_base,
+                                const char *file);
 
 #define DUMP_INVALID_MEM_ACCESS
 #define DUMP_MMU_EXCEPTIONS
-//#define DUMP_INTERRUPTS
+#define DUMP_INTERRUPTS
 #define DUMP_INVALID_CSR
-//#define DUMP_ILLEGAL_INSTRUCTION
-//#define DUMP_EXCEPTIONS
-//#define DUMP_CSR
+// #define DUMP_ILLEGAL_INSTRUCTION
+// #define DUMP_EXCEPTIONS
+// #define DUMP_CSR
 #define CONFIG_LOGFILE
 #define CONFIG_SW_MANAGED_A_AND_D      1
 #define CONFIG_ALLOW_MISALIGNED_ACCESS 0
@@ -118,13 +118,13 @@ typedef uint128_t fp_uint;
 #define ELEN_DEFAULT (1 << 6)
 #define VLEN_DEFAULT (1 << 7)
 /* Modify these lines to fit architectural params */
-//#define VLEN <size_in_bits_here>
-//#define ELEN <typically_default_but_might_be_rattified>
+// #define VLEN <size_in_bits_here>
+// #define ELEN <typically_default_but_might_be_rattified>
 /* Uncomment the next line to DISABLE Vector Simulation "V-extension" */
-//#define VLEN 0
+// #define VLEN 0
 /* Uncomment the next line to have masked elements under mask-agnotic policy be filled with 1's
  * useful for vector register renaming, where masked elements dont need to be copied */
-//#define MASK_AGNOSTIC_FILL 1
+// #define MASK_AGNOSTIC_FILL 1
 #ifndef VLEN
 #define VLEN VLEN_DEFAULT
 #endif
@@ -229,8 +229,8 @@ typedef struct RISCVCPUState {
 #endif
 
 #if VLEN > 0
-    uint8_t  v_reg[32][VLEN / 8];
-    bool     most_recently_written_vregs[32];
+    uint8_t v_reg[32][VLEN / 8];
+    bool    most_recently_written_vregs[32];
 
     /* CSRs */
     uint16_t     vstart;
@@ -379,7 +379,8 @@ void riscv_set_debug_mode(RISCVCPUState *s, bool on);
 int riscv_benchmark_exit_code(RISCVCPUState *s);
 
 #include "riscv_machine.h"
-void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s, const uint64_t clint_base_addr);
+void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s,
+                            const uint64_t clint_base_addr);
 void create_boot_rom_image(uint32_t *rom, uint32_t rom_size_bytes, const char *file_name);
 void riscv_ram_serialize(RISCVCPUState *s, const char *dump_name);
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr);
