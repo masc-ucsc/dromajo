@@ -74,7 +74,7 @@ static void dump_mainram_helper(const void *base, size_t size, bool first, uint6
 
 #define DUMP_INVALID_MEM_ACCESS
 #define DUMP_MMU_EXCEPTIONS
-#define DUMP_INTERRUPTS
+// #define DUMP_INTERRUPTS
 #define DUMP_INVALID_CSR
 // #define DUMP_ILLEGAL_INSTRUCTION
 // #define DUMP_EXCEPTIONS
