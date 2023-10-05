@@ -266,6 +266,7 @@ static void sigintr_handler(int dummy) {
 int main(int argc, char **argv) {
     const char *port_name = NULL;
     int         port_num  = 0;
+#if 0
     for (;;) {
         // clang-format off
         static struct option long_options[] = {
@@ -286,6 +287,7 @@ int main(int argc, char **argv) {
             default: break;
         }
     };
+#endif
 
 #ifdef REGRESS_COSIM
     dromajo_cosim_state_t *costate = 0;

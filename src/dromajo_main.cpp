@@ -39,6 +39,7 @@
  */
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -53,7 +54,6 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
-#include <ctype.h>
 
 #include "dromajo.h"
 #ifndef __APPLE__
@@ -89,7 +89,7 @@ typedef struct {
 
 static struct termios oldtty;
 static int            old_fd0_flags;
-static STDIODevice *  global_stdio_device;
+static STDIODevice   *global_stdio_device;
 
 static void term_exit(void) {
     tcsetattr(0, TCSANOW, &oldtty);
@@ -126,7 +126,6 @@ static void console_write(void *opaque, const uint8_t *buf, int len) {
 }
 
 static int console_read(void *opaque, uint8_t *buf, int len) {
-
     STDIODevice *s = (STDIODevice *)opaque;
 
     if (len <= 0)
@@ -175,7 +174,7 @@ CharacterDevice *console_init(BOOL allow_ctrlc, FILE *stdin, FILE *out) {
     term_init(allow_ctrlc);
 
     CharacterDevice *dev = (CharacterDevice *)mallocz(sizeof *dev);
-    STDIODevice *    s   = (STDIODevice *)mallocz(sizeof *s);
+    STDIODevice     *s   = (STDIODevice *)mallocz(sizeof *s);
     s->stdin             = stdin;
     s->out               = out;
     /* Note: the glibc does not properly tests the return value of
@@ -207,10 +206,10 @@ typedef enum {
 #define SECTOR_SIZE 512UL
 
 typedef struct BlockDeviceFile {
-    FILE *              f;
+    FILE               *f;
     int64_t             nb_sectors;
     BlockDeviceModeEnum mode;
-    uint8_t **          sector_table;
+    uint8_t           **sector_table;
 } BlockDeviceFile;
 
 static int64_t bf_get_sector_count(BlockDevice *bs) {
@@ -218,7 +217,7 @@ static int64_t bf_get_sector_count(BlockDevice *bs) {
     return bf->nb_sectors;
 }
 
-//#define DUMP_BLOCK_READ
+// #define DUMP_BLOCK_READ
 
 static int bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n, BlockDeviceCompletionFunc *cb, void *opaque) {
     BlockDeviceFile *bf = (BlockDeviceFile *)bs->opaque;
@@ -238,7 +237,7 @@ static int bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int
             if (!bf->sector_table[sector_num]) {
                 fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
                 size_t got = fread(buf, 1, SECTOR_SIZE, bf->f);
-                (void) got; // Make GCC happy
+                (void)got;  // Make GCC happy
                 assert(got == SECTOR_SIZE);
             } else {
                 memcpy(buf, bf->sector_table[sector_num], SECTOR_SIZE);
@@ -249,7 +248,7 @@ static int bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int
     } else {
         fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
         size_t got = fread(buf, 1, n * SECTOR_SIZE, bf->f);
-        (void) got; // Make GCC happy
+        (void)got;  // Make GCC happy
         assert(got == n * SECTOR_SIZE);
     }
     /* synchronous read */
@@ -306,7 +305,7 @@ static BlockDevice *block_device_init(const char *filename, BlockDeviceModeEnum 
     fseek(f, 0, SEEK_END);
     int64_t file_size = ftello(f);
 
-    BlockDevice *    bs = (BlockDevice *)mallocz(sizeof *bs);
+    BlockDevice     *bs = (BlockDevice *)mallocz(sizeof *bs);
     BlockDeviceFile *bf = (BlockDeviceFile *)mallocz(sizeof *bf);
 
     bf->mode       = mode;
@@ -336,7 +335,7 @@ typedef struct {
 static void tun_write_packet(EthernetDevice *net, const uint8_t *buf, int len) {
     TunState *s   = (TunState *)net->opaque;
     ssize_t   got = write(s->fd, buf, len);
-    (void) got; // Make GCC happy
+    (void)got;  // Make GCC happy
     assert(got == len);
 }
 
@@ -462,8 +461,8 @@ static EthernetDevice *slirp_open(void) {
     struct in_addr  host       = {.s_addr = htonl(0x0a000202)}; /* 10.0.2.2 */
     struct in_addr  dhcp       = {.s_addr = htonl(0x0a00020f)}; /* 10.0.2.15 */
     struct in_addr  dns        = {.s_addr = htonl(0x0a000203)}; /* 10.0.2.3 */
-    const char *    bootfile   = NULL;
-    const char *    vhostname  = NULL;
+    const char     *bootfile   = NULL;
+    const char     *vhostname  = NULL;
     int             restricted = 0;
 
     if (slirp_state) {
@@ -614,20 +613,20 @@ static bool load_elf_and_fake_the_config(VirtMachineParams *p, const char *path)
 
 RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *prog                     = argv[0];
-    char *      snapshot_load_name       = 0;
-    char *      snapshot_save_name       = 0;
+    char       *snapshot_load_name       = 0;
+    char       *snapshot_save_name       = 0;
     const char *path                     = NULL;
     const char *cmdline                  = NULL;
     long        ncpus                    = 0;
     uint64_t    maxinsns                 = 0;
-    uint64_t 	skip_insns				 = 0;
+    uint64_t    skip_insns               = 0;
     uint64_t    trace                    = UINT64_MAX;
     long        memory_size_override     = 0;
     uint64_t    memory_addr_override     = 0;
     bool        ignore_sbi_shutdown      = false;
     bool        dump_memories            = false;
-    char *      bootrom_name             = 0;
-    char *      dtb_name                 = 0;
+    char       *bootrom_name             = 0;
+    char       *dtb_name                 = 0;
     bool        compact_bootrom          = false;
     uint64_t    reset_vector_override    = 0;
     uint64_t    plic_base_addr_override  = 0;
@@ -638,10 +637,10 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *simpoint_file            = 0;
     bool        clear_ids                = false;
 #ifdef LIVECACHE
-    uint64_t    live_cache_size          = 8*1024*1024;
+    uint64_t live_cache_size = 8 * 1024 * 1024;
 #endif
-    bool        elf_based                = false;
-    bool        allow_ctrlc              = false;
+    bool elf_based   = false;
+    bool allow_ctrlc = false;
 
     dromajo_stdout = stdout;
     dromajo_stderr = stderr;
@@ -656,7 +655,9 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             {"ncpus",                   required_argument, 0,  'n' }, // CFG
             {"load",                    required_argument, 0,  'l' },
             {"save",                    required_argument, 0,  's' },
+#ifdef SIMPOINT_BB
             {"simpoint",                required_argument, 0,  'S' },
+#endif
             {"maxinsns",                required_argument, 0,  'm' }, // CFG
             {"skip_insns",              required_argument, 0,  'z' }, // CFG
             {"trace   ",                required_argument, 0,  't' },
@@ -686,9 +687,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             break;
 
         switch (c) {
-            case 'X':
-                allow_ctrlc = true;
-                break;
+            case 'X': allow_ctrlc = true; break;
             case 'c':
                 if (cmdline)
                     usage(prog, "already had a kernel command line");
@@ -713,11 +712,13 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
                 snapshot_save_name = strdup(optarg);
                 break;
 
+#ifdef SIMPOINT_BB
             case 'S':
                 if (simpoint_file)
                     usage(prog, "already had a simpoint file");
                 simpoint_file = strdup(optarg);
                 break;
+#endif
 
             case 'm':
                 if (maxinsns)
@@ -733,7 +734,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
                         maxinsns *= 1000000000;
                 }
                 break;
-                
+
             case 'z':
                 if (skip_insns)
                     usage(prog, "already had a skip instructions");
@@ -850,8 +851,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
                 }
                 break;
 #endif
-            case 'G':
-                break;
+            case 'G': break;
 
             default: usage(prog, "I'm not having this argument");
         }
@@ -862,10 +862,10 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     else
         path = argv[optind++];
 
-/*
-    if (optind < argc)
-        usage(prog, "too many arguments");
-*/
+    /*
+        if (optind < argc)
+            usage(prog, "too many arguments");
+    */
 
     assert(path);
     BlockDeviceModeEnum drive_mode = BF_MODE_SNAPSHOT;
@@ -914,7 +914,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     /* open the files & devices */
     for (int i = 0; i < p->drive_count; i++) {
         BlockDevice *drive;
-        char *       fname;
+        char        *fname;
         fname = get_file_path(p->cfg_filename, p->tab_drive[i].filename);
 #ifdef CONFIG_FS_NET
         if (is_url(fname)) {
@@ -932,7 +932,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     }
 
     for (int i = 0; i < p->fs_count; i++) {
-        FSDevice *  fs;
+        FSDevice   *fs;
         const char *path;
         path = p->tab_fs[i].filename;
 #ifdef CONFIG_FS_NET
@@ -1031,10 +1031,9 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             } else
                 load_hex_image(s, buf, buf_len);
         }
-        for (int i = 0; i < (int)p->ncpus; ++i)
-            s->cpu_state[i]->debug_mode = true;
+        for (int i = 0; i < (int)p->ncpus; ++i) s->cpu_state[i]->debug_mode = true;
     } else {
-        s  = virt_machine_load(p, s);
+        s = virt_machine_load(p, s);
         if (!s)
             return NULL;
     }
@@ -1087,7 +1086,7 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     if (maxinsns > 0) {
         s->common.maxinsns = maxinsns;
     }
-    
+
     if (skip_insns > 0) {
         s->common.skip_insns = skip_insns;
     }

@@ -259,10 +259,17 @@ static void clint_write(void *opaque, uint32_t offset, uint32_t val, int size_lo
         int hartid = offset >> 2;
         if (m->ncpus <= hartid) {
             vm_error("%s: MSIP access for hartid:%d which is beyond ncpus\n", __func__, hartid);
-        } else if (val & 1)
+        } else if (val & 1) {
             riscv_cpu_set_mip(m->cpu_state[hartid], MIP_MSIP);
-        else
+#ifdef DUMP_CLINT
+            vm_error("clint_write: cpu_set_mip offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
+        } else {
             riscv_cpu_reset_mip(m->cpu_state[hartid], MIP_MSIP);
+#ifdef DUMP_CLINT
+            vm_error("clint_write: cpu_reset_mip offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
+        }
     } else if (offset == 0xbff8) {
         uint64_t mtime          = m->cpu_state[0]->mcycle / RTC_FREQ_DIV;  // WARNING: move mcycle to RISCVMachine
         mtime                   = (mtime & 0xFFFFFFFF00000000L) + val;
@@ -282,6 +289,9 @@ static void clint_write(void *opaque, uint32_t offset, uint32_t val, int size_lo
             m->cpu_state[hartid]->timecmp = (m->cpu_state[hartid]->timecmp & ~0xffffffff) | val;
             riscv_cpu_reset_mip(m->cpu_state[hartid], MIP_MTIP);
         }
+#ifdef DUMP_CLINT
+        vm_error("clint_write: cpu_reset_mip timecmp offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
     } else {
         vm_error("clint_write to unmanaged address CLINT_BASE+0x%x\n", offset);
         val = 0;

@@ -302,6 +302,41 @@ buildroot login:
 
 ### Multicore checkpoints
 
+To check the multicore there is a runs/multicore benchmark that programs the interrupts.
+
+```
+cd run/multicore
+make
+../../build/dromajo --ncpus 2 --maxinsns 110M ./main
+BBOOOOTT......
+
+core1
+core0
+core1
+core0
+core1
+```
+
+To save the checkpoint in the middle:
+
+```
+../../build/dromajo --ncpus 2 --save ck1 --maxinsns 50M ./main
+BBOOOOTT......
+
+core1
+core0
+```
+
+Then the checkpoint can be loaded and continues:
+
+```
+../../build/dromajo --ncpus 2 --load ck1 --maxinsns 60M ./main
+core1
+core0
+core1
+```
+
+
 This is a sample of execution booting a 2 core Linux, running for 8B instructions. Then re-loading the multicore checkpoint and continuing the execution correctly.
 
 ```
