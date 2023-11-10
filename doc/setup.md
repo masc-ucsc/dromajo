@@ -339,7 +339,15 @@ core1
 
 This is a sample of execution booting a 2 core Linux, running for 8B instructions. Then re-loading the multicore checkpoint and continuing the execution correctly.
 
+To get this Linux boot, the following version tools were used:
+
+````
+GNU toolchain with gcc v9.2
+openSBI v0.8
+RISC-V linux buildroot version 2020.05.1
+Linux kernel version v5.7
 ```
+
  ./dromajo --maxinsn 80000000 --save mc2 --ncpus 2 ./boot.cfg
 
 OpenSBI v0.8
