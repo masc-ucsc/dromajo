@@ -46,7 +46,9 @@
 
 typedef struct RISCVCPUState RISCVCPUState;
 
-#define ROM_SIZE       0x00002000
+// 4K per core context + 4K for FDT context
+// ROM_SIZE >= ncpus * 4K + 4K
+#define ROM_SIZE       0x00009000
 #define ROM_CODE_SIZE  0x00000B00
 #define ROM_BASE_ADDR  0x00010000
 #define BOOT_BASE_ADDR 0x00010040
@@ -65,12 +67,6 @@ typedef struct mem_loc_t {
     bool     is_ram;
     int      act_loc;
 } mem_loc_var;
-
-static void init_mem_loc_t(mem_loc_t *mem_loc, int size);
-
-static void dump_mainram(RISCVCPUState *s, mem_loc_t *mem_loc, int num_ram, const char *file);
-static void dump_mainram_helper(const void *base, size_t size, bool first, uint64_t ram_base_addr, uint64_t cur_base,
-                                const char *file);
 
 #define DUMP_INVALID_MEM_ACCESS
 #define DUMP_MMU_EXCEPTIONS

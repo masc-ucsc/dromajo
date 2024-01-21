@@ -414,7 +414,7 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
     uint64_t mem_base = strtoul(&buf[1], NULL, 16);
     uint64_t mem_size = 2;
 
-    for (int pos = 0; pos < buf_len; ++pos) {
+    for (auto pos = 0u; pos < buf_len; ++pos) {
         if (buf[pos] == ',') {
             mem_size = strtoul(&buf[pos + 1], NULL, 16);
         }
@@ -427,8 +427,8 @@ void handle_rsp_m(const char *buf, const size_t buf_len) {
 
     char *dump = (char *)alloca(2 * mem_size);  // 2 chars per byte
 
-    for (uint64_t i = 0u; i < mem_size; ++i) {
-        uint64_t v = virt_machine_read_u8(gdb_m, gdb_hartid, mem_base + i);
+    for (auto i = 0u; i < mem_size; ++i) {
+        auto v = virt_machine_read_u8(gdb_m, gdb_hartid, mem_base + i);
         if (v > 255) {  // error. Respond whatever we got
             send_rsp_pkt_to_gdb(dump, 2 * i);
             return;

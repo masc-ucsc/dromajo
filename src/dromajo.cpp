@@ -200,6 +200,25 @@ static int iterate_core(RISCVMachine *m, int hartid, int n_cycles) {
     uint32_t insn_raw = -1;
     bool     do_trace = false;
     (void)riscv_read_insn(cpu, &insn_raw, last_pc);
+  #ifndef NDEBUG
+    static int counter = 0;
+    static uint64_t x_last_pc = 0;
+    static uint32_t x_insn_raw = 0;
+    if ((insn_raw+1) == 0 || insn_raw == 0) {
+      if (x_last_pc != last_pc || counter > 1024) {
+        fprintf (stderr, "counter=%d last_pc = %lx, insn_raw = %x\n", counter, x_last_pc, x_insn_raw);
+        x_last_pc = last_pc;
+        x_insn_raw = insn_raw;
+        counter = 0;
+      }
+      counter++;
+    }else{
+      if (counter) {
+        fprintf (stderr, "counter=%d last_pc = %lx, insn_raw = %x \n", counter, x_last_pc, x_insn_raw);
+      }
+      counter = 0;
+    }
+#endif
 
 #ifdef BRANCHPROF
     for (int i = 0; i < m->ncpus; ++i) {
@@ -264,9 +283,9 @@ static void sigintr_handler(int dummy) {
 }
 
 int main(int argc, char **argv) {
-    const char *port_name = NULL;
     int         port_num  = 0;
 #if 0
+    const char *port_name = NULL;
     for (;;) {
         // clang-format off
         static struct option long_options[] = {

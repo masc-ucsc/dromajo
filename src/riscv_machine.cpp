@@ -953,7 +953,6 @@ static int load_bootrom(RISCVMachine *s, const char *bootrom_name) {
 static int generate_bootrom(RISCVMachine *s) {
     uint8_t  *ram_ptr        = get_ram_ptr(s, ROM_BASE_ADDR);
     uint32_t *q              = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
-    int32_t   bootromSzBytes = 0;
 
     /*
      * RISCVEMU upon which Dromajo is based used to generate the boot
@@ -984,7 +983,7 @@ static int generate_bootrom(RISCVMachine *s) {
         *q++ = 0x00000013;  // nop
     }
     *q++ = 0x00000597;  // 1:      auipc  a1, 0x0
-    *q++ = 0x0f058593;  //         addi   a1, a1, 240 # _start + 256
+    *q++ = 0x0f058593;  //         addi   a1, a1, 240 # _start + 256 Pointer to FDT
     *q++ = 0x60300413;  //         li     s0, 1539
     *q++ = 0x7b041073;  //         csrw   dcsr, s0
     if (s->ram_base_addr == 0xC000000000) {
@@ -999,9 +998,8 @@ static int generate_bootrom(RISCVMachine *s) {
     }
     *q++           = 0x7b141073;  //         csrw   dpc, s0
     *q++           = 0x7b200073;  //         dret
-    bootromSzBytes = 13 * sizeof(uint32_t);
 
-    return bootromSzBytes;
+    return (uint8_t *)q - ram_ptr;
 }
 
 /* Return non-zero on failure */
@@ -1079,6 +1077,7 @@ static int copy_kernel(RISCVMachine *s, uint8_t *fw_buf, size_t fw_buf_len, cons
                 fdt_off += 256;
 
             uint8_t *ram_ptr = get_ram_ptr(s, ROM_BASE_ADDR);
+	    // WARNING: ROM_SIZE has 4K per core, the first 4K are for FDT
             if (riscv_build_fdt(s, ram_ptr + fdt_off, dtb_name, cmd_line, s->initrd_start, initrd_end) < 0)
                 return -1;
         }
@@ -1213,7 +1212,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     cpu_register_ram(s->mem_map, s->ram_base_addr, s->ram_size, 0);
 
     /* Boot ROM. */
-    cpu_register_ram(s->mem_map, ROM_BASE_ADDR, s->ncpus * ROM_SIZE, 0);
+    cpu_register_ram(s->mem_map, ROM_BASE_ADDR, ROM_SIZE, 0);
 
     for (int i = 0; i < s->ncpus; ++i) {
         s->cpu_state[i]->physical_addr_len = p->physical_addr_len;
@@ -1439,7 +1438,7 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
     bool is_serializable = true;
     for (int i = 0; i < m->ncpus && is_serializable; ++i) {
         RISCVCPUState *s = m->cpu_state[i];
-        is_serializable  = s->priv != 3 || (ROM_BASE_ADDR + (m->ncpus * ROM_SIZE) < s->pc);
+        is_serializable  = s->priv != 3 || ((ROM_BASE_ADDR + ROM_SIZE) < s->pc);
     }
 
     /* Serialize core states. */
@@ -1458,39 +1457,57 @@ void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
         }
 
         /* Generate single boot ROM for all cores. */
-        const uint32_t kTotalRomSize = (m->ncpus * ROM_SIZE) / 4;
+        const uint32_t kTotalRomSize = ROM_SIZE / 4; // 4 due to uint32_t type
         uint32_t       rom[kTotalRomSize];
-        memset(rom, 0, sizeof(rom));
+	{
+            uint8_t *ram_ptr = get_ram_ptr(m, ROM_BASE_ADDR);
+	    memcpy(rom, ram_ptr, sizeof(rom)); // Keep current ROM + patches created after (needed for FDT)
+	}
 
         // ROM organization
-        // Core 0:
+	// 0..4KB
         // 0000..003F wasted
-        // 0040..0AFF boot code (2,752 B)
-        // 0B00..0FFF boot data (  512 B)
-        // Core 1:
-        // 1000..003F wasted
-        // 1040..0AFF boot code (2,752 B)
+        // 0040..0AFF all cores boot area
+	//
+        // Core 0:
+        // 1000..0AFF boot code (2,752 B)
         // 1B00..0FFF boot data (  512 B)
+        // Core 1:
+        // 2000..0AFF boot code (2,752 B)
+        // 2B00..0FFF boot data (  512 B)
         // repeats for each core ...
-        for (int i = 0; i < m->ncpus; ++i) {
-            RISCVCPUState *s        = m->cpu_state[i];
-            uint32_t       code_pos = ((i << 12) | (BOOT_BASE_ADDR - ROM_BASE_ADDR)) / sizeof(*rom);
-            uint32_t       data_pos = ((i << 12) | 0xB00) / sizeof(*rom);
 
-            /* All cores start by determining the PC they should jump to. */
-            rom[code_pos++] = 0xf1402573;  // csrr   a0, mhartid
-            rom[code_pos++] = 0x00c5151b;  // slliw  a0, a0, 12
+	{
+		uint32_t       code_pos = (BOOT_BASE_ADDR - ROM_BASE_ADDR) / sizeof(*rom);
 
-            /* These four instructions must be the last in preamble. */
-            /* If other instructions should be added, add them before these four. */
-            rom[code_pos++] = 0x00000597;  // auipc   a1, 0x0
-            rom[code_pos++] = 0x0105859b;  // addiw a1, a1, 0xc
-            rom[code_pos++] = 0x00b5053b;  // addw a0, a0, a1
-            rom[code_pos++] = 0x50067;     // jr a0
+		/* All cores start by determining the PC they should jump to. */
+		rom[code_pos++] = 0xf1402573;  // csrr   a0, mhartid
+		rom[code_pos++] = 0x00150513;  // addi  a0, a0, 1
+		rom[code_pos++] = 0x00c5151b;  // slliw  a0, a0, 12
 
-            /* Generates and appends recovery code for each core to rom. */
-            generate_core_boot_rom(rom, kTotalRomSize, code_pos, data_pos, s, m->clint_base_addr);
-        }
+		/* These four instructions must be the last in preamble. */
+		/* If other instructions should be added, add them before these four. */
+		rom[code_pos++] = 0x00000597; // auipc  a1, 0x0
+                // Clear the lower 12 bits to start in page align (boot rom has 1 page per core)
+		rom[code_pos++] = 0x40b5d593; // srai a1, a1, 11
+                rom[code_pos++] = 0x00b59593; // slli a1, a1, 11
+
+		rom[code_pos++] = 0x00b5053b; // addw a0, a0, a1
+		rom[code_pos++] = 0x50067;    // jr a0
+		for (int i = 0; i < m->ncpus; ++i) {
+			code_pos = ((i+1) << 12) / sizeof(*rom);
+
+			uint32_t       data_pos = (((i+1) << 12) | ROM_CODE_SIZE) / sizeof(*rom);
+			assert(code_pos<kTotalRomSize); // Too many cores for the value of ROM_SIZE
+			assert(data_pos<kTotalRomSize); // Too many cores for the value of ROM_SIZE
+			assert(data_pos<((i+2)<<12));   // Data pos can not overlap with next core region
+
+			const uint32_t max_per_core_pos = ((i+2)<<12)/4; // 4 due to uint32_t type
+			RISCVCPUState *s        = m->cpu_state[i];
+			generate_core_boot_rom(rom, max_per_core_pos, code_pos, data_pos, s, m->clint_base_addr);
+		}
+		assert(ROM_SIZE> (1<<12)*(m->ncpus+1)); // +1 for the FDT region
+	}
 
         /* Write generated boot ROM to file. */
         uint32_t name_len = strlen(dump_name) + 64;
