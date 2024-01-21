@@ -62,7 +62,7 @@ uint64_t elf64_get_entrypoint(const uint8_t *image) {
 
 bool elf64_find_global(const uint8_t *image, size_t image_size, const char *key, uint64_t *value) {
     const uint8_t *image_end = image + image_size;
-    Elf64_Ehdr *   ehdr      = (Elf64_Ehdr *)image;
+    Elf64_Ehdr    *ehdr      = (Elf64_Ehdr *)image;
 
     if (ehdr->e_shoff + sizeof(Elf64_Shdr) - 1 > image_size)
         return false;
@@ -74,7 +74,7 @@ bool elf64_find_global(const uint8_t *image, size_t image_size, const char *key,
 
     const Elf64_Sym *symtab     = 0;
     int              symtab_len = 0;
-    const char *     strtab     = 0;
+    const char      *strtab     = 0;
 
     if ((const uint8_t *)&shdr[ehdr->e_shnum] > image_end)
         return false;

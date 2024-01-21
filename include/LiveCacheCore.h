@@ -295,8 +295,8 @@ class CacheAssoc : public CacheGeneric<State, Addr_t> {
     typedef typename CacheGeneric<State, Addr_t>::CacheLine Line;
 
   protected:
-    Line *            mem;
-    Line **           content;
+    Line             *mem;
+    Line            **content;
     uint16_t          irand;
     ReplacementPolicy policy;
 
@@ -328,7 +328,7 @@ class CacheDM : public CacheGeneric<State, Addr_t> {
     typedef typename CacheGeneric<State, Addr_t>::CacheLine Line;
 
   protected:
-    Line * mem;
+    Line  *mem;
     Line **content;
 
     friend class CacheGeneric<State, Addr_t>;
@@ -519,7 +519,7 @@ typename CacheAssoc<State, Addr_t>::Line *CacheAssoc<State, Addr_t>::findLine2Re
         }
     }
 
-    Line * tmp;
+    Line  *tmp;
     Line **tmp_pos;
     if (!lineHit) {
         assert(lineFree);
@@ -611,7 +611,7 @@ typename CacheDM<State, Addr_t>::Line *CacheDM<State, Addr_t>::findLinePrivate(A
 template <class State, class Addr_t>
 typename CacheDM<State, Addr_t>::Line *CacheDM<State, Addr_t>::findLine2Replace(Addr_t addr) {
     Addr_t tag  = this->calcTag(addr);
-    Line * line = content[this->calcIndex4Tag(tag)];
+    Line  *line = content[this->calcIndex4Tag(tag)];
 
     return line;
 }

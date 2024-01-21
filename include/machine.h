@@ -60,7 +60,7 @@ struct FBDevice {
     int      stride;  /* current stride in bytes */
     uint8_t *fb_data; /* current pointer to the pixel data */
     int      fb_size; /* frame buffer memory size (info only) */
-    void *   device_opaque;
+    void    *device_opaque;
     void (*refresh)(struct FBDevice *fb_dev, SimpleFBDrawFunc *redraw_func, void *opaque);
 };
 
@@ -77,9 +77,9 @@ struct FBDevice {
 extern int roi_region;
 #ifdef SIMPOINT_BB
 
-//#define SIMPOINT_SIZE 1000000UL      // For Benchmarking Fine Grain
-#define SIMPOINT_SIZE 10000UL        // For verification
-//#define SIMPOINT_SIZE 100000000UL  // Traditional 100M simpoint
+// #define SIMPOINT_SIZE 1000000UL      // For Benchmarking Fine Grain
+#define SIMPOINT_SIZE 10000UL  // For verification
+// #define SIMPOINT_SIZE 100000000UL  // Traditional 100M simpoint
 #endif
 
 typedef enum {
@@ -92,27 +92,27 @@ typedef enum {
 } VMFileTypeEnum;
 
 typedef struct {
-    char *   filename;
+    char    *filename;
     uint8_t *buf;
     int      len;
 } VMFileEntry;
 
 typedef struct {
-    char *       device;
-    char *       filename;
+    char        *device;
+    char        *filename;
     BlockDevice *block_dev;
 } VMDriveEntry;
 
 typedef struct {
-    char *    device;
-    char *    tag; /* 9p mount tag */
-    char *    filename;
+    char     *device;
+    char     *tag; /* 9p mount tag */
+    char     *filename;
     FSDevice *fs_dev;
 } VMFSEntry;
 
 typedef struct {
-    char *          driver;
-    char *          ifname;
+    char           *driver;
+    char           *ifname;
     EthernetDevice *net;
 } VMEthEntry;
 
@@ -128,11 +128,11 @@ struct Simpoint {
 #endif
 
 typedef struct {
-    char *           cfg_filename;
+    char            *cfg_filename;
     uint64_t         ram_base_addr;
     uint64_t         ram_size;
     BOOL             rtc_local_time;
-    char *           display_device; /* NULL means no display */
+    char            *display_device; /* NULL means no display */
     int64_t          width, height;  /* graphic width & height */
     CharacterDevice *console;
     VMDriveEntry     tab_drive[MAX_DRIVE_DEVICE];
@@ -194,7 +194,7 @@ typedef struct VirtMachine {
     /* network */
     EthernetDevice *net;
     /* console */
-    VIRTIODevice *   console_dev;
+    VIRTIODevice    *console_dev;
     CharacterDevice *console;
     /* graphics */
     FBDevice *fb_dev;
@@ -204,9 +204,9 @@ typedef struct VirtMachine {
     std::vector<Simpoint> simpoints;
 #endif
 
-    char *   snapshot_load_name;
-    char *   snapshot_save_name;
-    char *   terminate_event;
+    char    *snapshot_load_name;
+    char    *snapshot_save_name;
+    char    *terminate_event;
     int64_t  maxinsns;
     uint64_t skip_insns;
     uint64_t trace;
@@ -229,7 +229,7 @@ const char *virt_machine_get_name(void);
 void        virt_machine_set_defaults(VirtMachineParams *p);
 void        virt_machine_load_config_file(VirtMachineParams *p, const char *filename, void (*start_cb)(void *opaque), void *opaque);
 void        vm_add_cmdline(VirtMachineParams *p, const char *cmdline);
-char *      get_file_path(const char *base_filename, const char *filename);
+char       *get_file_path(const char *base_filename, const char *filename);
 void        virt_machine_free_config(VirtMachineParams *p);
 RISCVMachine *virt_machine_init(const VirtMachineParams *p);
 RISCVMachine *virt_machine_load(const VirtMachineParams *p, RISCVMachine *s);
@@ -237,8 +237,8 @@ int           virt_machine_get_sleep_duration(RISCVMachine *s, int hartid, int d
 BOOL          vm_mouse_is_absolute(RISCVMachine *s);
 void          vm_send_mouse_event(RISCVMachine *s1, int dx, int dy, int dz, unsigned int buttons);
 void          vm_send_key_event(RISCVMachine *s1, BOOL is_down, uint16_t key_code);
-void load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_len);
-void load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len);
+void          load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_len);
+void          load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len);
 
 /* gui */
 void sdl_refresh(RISCVMachine *m);
@@ -246,7 +246,7 @@ void sdl_init(int width, int height);
 
 /* simplefb.c */
 typedef struct SimpleFBState SimpleFBState;
-SimpleFBState *              simplefb_init(PhysMemoryMap *map, uint64_t phys_addr, FBDevice *fb_dev, int width, int height);
+SimpleFBState               *simplefb_init(PhysMemoryMap *map, uint64_t phys_addr, FBDevice *fb_dev, int width, int height);
 void simplefb_refresh(FBDevice *fb_dev, SimpleFBDrawFunc *redraw_func, void *opaque, PhysMemoryRange *mem_range, int fb_page_count);
 
 /* vga.c */

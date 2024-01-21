@@ -63,11 +63,11 @@ typedef struct {
 typedef struct JSONValue {
     JSONTypeEnum type;
     union {
-        JSONString *       str;
+        JSONString        *str;
         int64_t            int64;
         BOOL               b;
         struct JSONObject *obj;
-        struct JSONArray * array;
+        struct JSONArray  *array;
     } u;
 } JSONValue;
 

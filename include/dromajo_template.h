@@ -246,7 +246,7 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
     uint32_t     opcode, insn, rd, rs1, rs2, funct3;
     int32_t      imm, cond, err;
     target_ulong addr, val, val2;
-    uint8_t *    code_ptr, *code_end;
+    uint8_t     *code_ptr, *code_end;
     target_ulong code_to_pc_addend;
     uint64_t     insn_counter_addend;
     uint64_t     insn_counter_start = s->insn_counter;
@@ -1289,84 +1289,84 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
                 }
                 NEXT_INSN;
             case 0x2f: funct3 = (insn >> 12) & 7;
-#define OP_A(size)                                                                      \
-    {                                                                                   \
-        uint##size##_t rval;                                                            \
-                                                                                        \
-        addr   = read_reg(rs1);                                                         \
-        funct3 = insn >> 27;                                                            \
-        switch (funct3) {                                                               \
-            case 2: /* lr.w/lr.d */                                                     \
-                if (rs2 != 0)                                                           \
-                    goto illegal_insn;                                                  \
-                if (target_read_u##size(s, &rval, addr))                                \
-                    goto mmu_exception;                                                 \
-                val         = (int##size##_t)rval;                                      \
-                s->load_res = addr;                                                     \
-                s->load_res_memseqno = s->machine->memseqno;                            \
-                break;                                                                  \
-                                                                                        \
-            case 3: /* sc.w/sc.d */                                                     \
-                if ((addr & (size / 8 - 1)) != 0) {                                     \
-                    s->pending_tval      = addr;                                        \
-                    s->pending_exception = CAUSE_MISALIGNED_STORE;                      \
-                    goto mmu_exception;                                                 \
-                }                                                                       \
+#define OP_A(size)                                                                         \
+    {                                                                                      \
+        uint##size##_t rval;                                                               \
+                                                                                           \
+        addr   = read_reg(rs1);                                                            \
+        funct3 = insn >> 27;                                                               \
+        switch (funct3) {                                                                  \
+            case 2: /* lr.w/lr.d */                                                        \
+                if (rs2 != 0)                                                              \
+                    goto illegal_insn;                                                     \
+                if (target_read_u##size(s, &rval, addr))                                   \
+                    goto mmu_exception;                                                    \
+                val                  = (int##size##_t)rval;                                \
+                s->load_res          = addr;                                               \
+                s->load_res_memseqno = s->machine->memseqno;                               \
+                break;                                                                     \
+                                                                                           \
+            case 3: /* sc.w/sc.d */                                                        \
+                if ((addr & (size / 8 - 1)) != 0) {                                        \
+                    s->pending_tval      = addr;                                           \
+                    s->pending_exception = CAUSE_MISALIGNED_STORE;                         \
+                    goto mmu_exception;                                                    \
+                }                                                                          \
                 if (s->load_res == addr && s->load_res_memseqno == s->machine->memseqno) { \
-                    if (target_write_u##size(s, addr, read_reg(rs2)))                   \
-                        goto mmu_exception;                                             \
-                    val         = 0;                                                    \
-                    s->load_res = ~0;                                                   \
-                    s->load_res_memseqno = 0;                                           \
-                } else {                                                                \
-                    val = 1;                                                            \
-                }                                                                       \
-                break;                                                                  \
-            case 1:    /* amiswap.w */                                                  \
-            case 0:    /* amoadd.w */                                                   \
-            case 4:    /* amoxor.w */                                                   \
-            case 0xc:  /* amoand.w */                                                   \
-            case 0x8:  /* amoor.w */                                                    \
-            case 0x10: /* amomin.w */                                                   \
-            case 0x14: /* amomax.w */                                                   \
-            case 0x18: /* amominu.w */                                                  \
-            case 0x1c: /* amomaxu.w */                                                  \
-                if (target_read_u##size(s, &rval, addr)) {                              \
-                    if (s->pending_exception != CAUSE_BREAKPOINT)                       \
-                        s->pending_exception += 2; /* LD -> ST */                       \
-                    goto mmu_exception;                                                 \
-                }                                                                       \
-                val  = (int##size##_t)rval;                                             \
-                val2 = read_reg(rs2);                                                   \
-                switch (funct3) {                                                       \
-                    case 1: /* amiswap.w */ break;                                      \
-                    case 0: /* amoadd.w */ val2 = (int##size##_t)(val + val2); break;   \
-                    case 4: /* amoxor.w */ val2 = (int##size##_t)(val ^ val2); break;   \
-                    case 0xc: /* amoand.w */ val2 = (int##size##_t)(val & val2); break; \
-                    case 0x8: /* amoor.w */ val2 = (int##size##_t)(val | val2); break;  \
-                    case 0x10: /* amomin.w */                                           \
-                        if ((int##size##_t)val < (int##size##_t)val2)                   \
-                            val2 = (int##size##_t)val;                                  \
-                        break;                                                          \
-                    case 0x14: /* amomax.w */                                           \
-                        if ((int##size##_t)val > (int##size##_t)val2)                   \
-                            val2 = (int##size##_t)val;                                  \
-                        break;                                                          \
-                    case 0x18: /* amominu.w */                                          \
-                        if ((uint##size##_t)val < (uint##size##_t)val2)                 \
-                            val2 = (int##size##_t)val;                                  \
-                        break;                                                          \
-                    case 0x1c: /* amomaxu.w */                                          \
-                        if ((uint##size##_t)val > (uint##size##_t)val2)                 \
-                            val2 = (int##size##_t)val;                                  \
-                        break;                                                          \
-                    default: goto illegal_insn;                                         \
-                }                                                                       \
-                if (target_write_u##size(s, addr, val2))                                \
-                    goto mmu_exception;                                                 \
-                break;                                                                  \
-            default: goto illegal_insn;                                                 \
-        }                                                                               \
+                    if (target_write_u##size(s, addr, read_reg(rs2)))                      \
+                        goto mmu_exception;                                                \
+                    val                  = 0;                                              \
+                    s->load_res          = ~0;                                             \
+                    s->load_res_memseqno = 0;                                              \
+                } else {                                                                   \
+                    val = 1;                                                               \
+                }                                                                          \
+                break;                                                                     \
+            case 1:    /* amiswap.w */                                                     \
+            case 0:    /* amoadd.w */                                                      \
+            case 4:    /* amoxor.w */                                                      \
+            case 0xc:  /* amoand.w */                                                      \
+            case 0x8:  /* amoor.w */                                                       \
+            case 0x10: /* amomin.w */                                                      \
+            case 0x14: /* amomax.w */                                                      \
+            case 0x18: /* amominu.w */                                                     \
+            case 0x1c: /* amomaxu.w */                                                     \
+                if (target_read_u##size(s, &rval, addr)) {                                 \
+                    if (s->pending_exception != CAUSE_BREAKPOINT)                          \
+                        s->pending_exception += 2; /* LD -> ST */                          \
+                    goto mmu_exception;                                                    \
+                }                                                                          \
+                val  = (int##size##_t)rval;                                                \
+                val2 = read_reg(rs2);                                                      \
+                switch (funct3) {                                                          \
+                    case 1: /* amiswap.w */ break;                                         \
+                    case 0: /* amoadd.w */ val2 = (int##size##_t)(val + val2); break;      \
+                    case 4: /* amoxor.w */ val2 = (int##size##_t)(val ^ val2); break;      \
+                    case 0xc: /* amoand.w */ val2 = (int##size##_t)(val & val2); break;    \
+                    case 0x8: /* amoor.w */ val2 = (int##size##_t)(val | val2); break;     \
+                    case 0x10: /* amomin.w */                                              \
+                        if ((int##size##_t)val < (int##size##_t)val2)                      \
+                            val2 = (int##size##_t)val;                                     \
+                        break;                                                             \
+                    case 0x14: /* amomax.w */                                              \
+                        if ((int##size##_t)val > (int##size##_t)val2)                      \
+                            val2 = (int##size##_t)val;                                     \
+                        break;                                                             \
+                    case 0x18: /* amominu.w */                                             \
+                        if ((uint##size##_t)val < (uint##size##_t)val2)                    \
+                            val2 = (int##size##_t)val;                                     \
+                        break;                                                             \
+                    case 0x1c: /* amomaxu.w */                                             \
+                        if ((uint##size##_t)val > (uint##size##_t)val2)                    \
+                            val2 = (int##size##_t)val;                                     \
+                        break;                                                             \
+                    default: goto illegal_insn;                                            \
+                }                                                                          \
+                if (target_write_u##size(s, addr, val2))                                   \
+                    goto mmu_exception;                                                    \
+                break;                                                                     \
+            default: goto illegal_insn;                                                    \
+        }                                                                                  \
     }
 
                 switch (funct3) {

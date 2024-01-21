@@ -56,8 +56,8 @@ FSFile *fs_dup(FSDevice *fs, FSFile *f) {
 
 FSFile *fs_walk_path1(FSDevice *fs, FSFile *f, const char *path, char **pname) {
     const char *p;
-    char *      name;
-    FSFile *    f1;
+    char       *name;
+    FSFile     *f1;
     FSQID       qid;
     int         len, ret;
     BOOL        is_last, is_first;

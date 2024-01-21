@@ -55,7 +55,7 @@ typedef struct {
     /* MMIO only: */
     PhysMemoryMap *mem_map;
     uint64_t       addr;
-    IRQSignal *    irq;
+    IRQSignal     *irq;
 } VIRTIOBusDef;
 
 typedef struct VIRTIODevice VIRTIODevice;

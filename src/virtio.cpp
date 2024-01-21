@@ -49,7 +49,7 @@
 #include "cutils.h"
 #include "list.h"
 
-//#define DEBUG_VIRTIO
+// #define DEBUG_VIRTIO
 
 /* MMIO addresses - from the Linux kernel */
 #define VIRTIO_MMIO_MAGIC_VALUE         0x000
@@ -141,12 +141,12 @@ typedef int VIRTIODeviceRecvFunc(VIRTIODevice *s1, int queue_idx, int desc_idx, 
 typedef uint8_t *VIRTIOGetRAMPtrFunc(VIRTIODevice *s, virtio_phys_addr_t paddr);
 
 struct VIRTIODevice {
-    PhysMemoryMap *  mem_map;
+    PhysMemoryMap   *mem_map;
     PhysMemoryRange *mem_range;
     /* PCI only */
     PCIDevice *pci_dev;
     /* MMIO only */
-    IRQSignal *          irq;
+    IRQSignal           *irq;
     VIRTIOGetRAMPtrFunc *get_ram_ptr;
     int                  debug;
 
@@ -443,7 +443,7 @@ static int memcpy_to_queue(VIRTIODevice *s, int queue_idx, int desc_idx, int off
 
 /* signal that the descriptor has been consumed */
 static void virtio_consume_desc(VIRTIODevice *s, int queue_idx, int desc_idx, int desc_len) {
-    QueueState *       qs = &s->queue[queue_idx];
+    QueueState        *qs = &s->queue[queue_idx];
     virtio_phys_addr_t addr;
     uint32_t           index;
 
@@ -847,7 +847,7 @@ static void virtio_block_req_end(VIRTIODevice *s, int ret) {
     int                write_size;
     int                queue_idx = s1->req.queue_idx;
     int                desc_idx  = s1->req.desc_idx;
-    uint8_t *          buf, buf1[1];
+    uint8_t           *buf, buf1[1];
 
     switch (s1->req.type) {
         case VIRTIO_BLK_T_IN:
@@ -875,7 +875,7 @@ static void virtio_block_req_end(VIRTIODevice *s, int ret) {
 }
 
 static void virtio_block_req_cb(void *opaque, int ret) {
-    VIRTIODevice *     s  = (VIRTIODevice *)opaque;
+    VIRTIODevice      *s  = (VIRTIODevice *)opaque;
     VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
 
     virtio_block_req_end(s, ret);
@@ -889,9 +889,9 @@ static void virtio_block_req_cb(void *opaque, int ret) {
 /* XXX: handle async I/O */
 static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx, int desc_idx, int read_size, int write_size) {
     VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
-    BlockDevice *      bs = s1->bs;
+    BlockDevice       *bs = s1->bs;
     BlockRequestHeader h;
-    uint8_t *          buf;
+    uint8_t           *buf;
     int                len, ret;
 
     if (s1->req_in_progress)
@@ -968,9 +968,9 @@ typedef struct {
 
 static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx, int desc_idx, int read_size, int write_size) {
     VIRTIONetDevice *s1 = (VIRTIONetDevice *)s;
-    EthernetDevice * es = s1->es;
+    EthernetDevice  *es = s1->es;
     VIRTIONetHeader  h;
-    uint8_t *        buf;
+    uint8_t         *buf;
     int              len;
 
     if (queue_idx == 1) {
@@ -989,7 +989,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx, int desc_idx,
 
 static BOOL virtio_net_can_write_packet(EthernetDevice *es) {
     VIRTIODevice *s  = (VIRTIODevice *)es->device_opaque;
-    QueueState *  qs = &s->queue[0];
+    QueueState   *qs = &s->queue[0];
     uint16_t      avail_idx;
 
     if (!qs->ready)
@@ -999,10 +999,10 @@ static BOOL virtio_net_can_write_packet(EthernetDevice *es) {
 }
 
 static void virtio_net_write_packet(EthernetDevice *es, const uint8_t *buf, int buf_len) {
-    VIRTIODevice *   s         = (VIRTIODevice *)es->device_opaque;
+    VIRTIODevice    *s         = (VIRTIODevice *)es->device_opaque;
     VIRTIONetDevice *s1        = (VIRTIONetDevice *)s;
     int              queue_idx = 0;
-    QueueState *     qs        = &s->queue[queue_idx];
+    QueueState      *qs        = &s->queue[queue_idx];
     int              desc_idx;
     VIRTIONetHeader  h;
     int              len, read_size, write_size;
@@ -1073,8 +1073,8 @@ typedef struct VIRTIOConsoleDevice {
 
 static int virtio_console_recv_request(VIRTIODevice *s, int queue_idx, int desc_idx, int read_size, int write_size) {
     VIRTIOConsoleDevice *s1 = (VIRTIOConsoleDevice *)s;
-    CharacterDevice *    cs = s1->cs;
-    uint8_t *            buf;
+    CharacterDevice     *cs = s1->cs;
+    uint8_t             *buf;
 
     if (queue_idx == 1) {
         /* send to console */
@@ -1291,7 +1291,7 @@ static void set_bit(uint8_t *tab, int k) { tab[k >> 3] |= 1 << (k & 7); }
 
 static void virtio_input_config_write(VIRTIODevice *s) {
     VIRTIOInputDevice *s1     = (VIRTIOInputDevice *)s;
-    uint8_t *          config = s->config_space;
+    uint8_t           *config = s->config_space;
 
     //    printf("config_write: %02x %02x\n", config[0], config[1]);
     switch (config[0]) {
@@ -1402,12 +1402,12 @@ VIRTIODevice *virtio_input_init(VIRTIOBusDef *bus, VirtioInputTypeEnum type) {
 typedef struct {
     struct list_head link;
     uint32_t         fid;
-    FSFile *         fd;
+    FSFile          *fd;
 } FIDDesc;
 
 typedef struct VIRTIO9PDevice {
     VIRTIODevice     common;
-    FSDevice *       fs;
+    FSDevice        *fs;
     int              msize;    /* maximum message size */
     struct list_head fid_list; /* list of FIDDesc */
     BOOL             req_in_progress;
@@ -1415,7 +1415,7 @@ typedef struct VIRTIO9PDevice {
 
 static FIDDesc *fid_find1(VIRTIO9PDevice *s, uint32_t fid) {
     struct list_head *el;
-    FIDDesc *         f;
+    FIDDesc          *f;
 
     list_for_each(el, &s->fid_list) {
         f = list_entry(el, FIDDesc, link);
@@ -1567,7 +1567,7 @@ static int marshall(VIRTIO9PDevice *s, uint8_t *buf1, int max_len, const char *f
             default: abort();
         }
     }
-    (void) buf_end; // Stop GCC complaints in release builds
+    (void)buf_end;  // Stop GCC complaints in release builds
     va_end(ap);
     return buf - buf1;
 }
@@ -1716,7 +1716,7 @@ static void virtio_9p_open_reply(FSDevice *fs, FSQID *qid, int err, P9OpenInfo *
 }
 
 static void virtio_9p_open_cb(FSDevice *fs, FSQID *qid, int err, void *opaque) {
-    P9OpenInfo *    oi        = (P9OpenInfo *)opaque;
+    P9OpenInfo     *oi        = (P9OpenInfo *)opaque;
     VIRTIO9PDevice *s         = oi->dev;
     int             queue_idx = oi->queue_idx;
 
@@ -1735,7 +1735,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
     uint16_t        tag;
     uint8_t         buf[1024];
     int             buf_len, err;
-    FSDevice *      fs = s->fs;
+    FSDevice       *fs = s->fs;
 
     if (queue_idx != 0)
         return 0;
@@ -1815,8 +1815,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 14: /* lcreate */
         {
             uint32_t fid, flags, mode, gid;
-            char *   name;
-            FSFile * f;
+            char    *name;
+            FSFile  *f;
             FSQID    qid;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wswww", &fid, &name, &flags, &mode, &gid))
@@ -1836,8 +1836,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 16: /* symlink */
         {
             uint32_t fid, gid;
-            char *   name, *symgt;
-            FSFile * f;
+            char    *name, *symgt;
+            FSFile  *f;
             FSQID    qid;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wssw", &fid, &name, &symgt, &gid))
@@ -1858,8 +1858,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 18: /* mknod */
         {
             uint32_t fid, mode, major, minor, gid;
-            char *   name;
-            FSFile * f;
+            char    *name;
+            FSFile  *f;
             FSQID    qid;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wswwww", &fid, &name, &mode, &major, &minor, &gid))
@@ -1880,7 +1880,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         {
             uint32_t fid;
             char     buf1[1024];
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "w", &fid))
                 goto protocol_error;
@@ -1899,7 +1899,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         {
             uint32_t fid;
             uint64_t mask;
-            FSFile * f;
+            FSFile  *f;
             FSStat   st;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wd", &fid, &mask))
@@ -1941,7 +1941,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         {
             uint32_t fid, mask, mode, uid, gid;
             uint64_t size, atime_sec, atime_nsec, mtime_sec, mtime_nsec;
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s,
                            queue_idx,
@@ -1979,7 +1979,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
             uint64_t offs;
             uint8_t *buf;
             int      n;
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wdw", &fid, &offs, &count))
                 goto protocol_error;
@@ -2007,7 +2007,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 52: /* lock */
         {
             uint32_t fid;
-            FSFile * f;
+            FSFile  *f;
             FSLock   lock;
 
             if (unmarshall(s,
@@ -2037,7 +2037,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 54: /* getlock */
         {
             uint32_t fid;
-            FSFile * f;
+            FSFile  *f;
             FSLock   lock;
 
             if (unmarshall(s,
@@ -2068,8 +2068,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 70: /* link */
         {
             uint32_t dfid, fid;
-            char *   name;
-            FSFile * f, *df;
+            char    *name;
+            FSFile  *f, *df;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wws", &dfid, &fid, &name))
                 goto protocol_error;
@@ -2088,8 +2088,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 72: /* mkdir */
         {
             uint32_t fid, mode, gid;
-            char *   name;
-            FSFile * f;
+            char    *name;
+            FSFile  *f;
             FSQID    qid;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wsww", &fid, &name, &mode, &gid))
@@ -2106,8 +2106,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 74: /* renameat */
         {
             uint32_t fid, new_fid;
-            char *   name, *new_name;
-            FSFile * f, *new_f;
+            char    *name, *new_name;
+            FSFile  *f, *new_f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wsws", &fid, &name, &new_fid, &new_name))
                 goto protocol_error;
@@ -2127,8 +2127,8 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 76: /* unlinkat */
         {
             uint32_t fid, flags;
-            char *   name;
-            FSFile * f;
+            char    *name;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wsw", &fid, &name, &flags))
                 goto protocol_error;
@@ -2146,7 +2146,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 100: /* version */
         {
             uint32_t msize;
-            char *   version;
+            char    *version;
             if (unmarshall(s, queue_idx, desc_idx, &offset, "ws", &msize, &version))
                 goto protocol_error;
             s->msize = msize;
@@ -2158,9 +2158,9 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         case 104: /* attach */
         {
             uint32_t fid, afid, uid;
-            char *   uname, *aname;
+            char    *uname, *aname;
             FSQID    qid;
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wwssw", &fid, &afid, &uname, &aname, &uid))
                 goto protocol_error;
@@ -2185,9 +2185,9 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
         {
             uint32_t fid, newfid;
             uint16_t nwname;
-            FSQID *  qids;
-            char **  names;
-            FSFile * f;
+            FSQID   *qids;
+            char   **names;
+            FSFile  *f;
             int      i;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wwh", &fid, &newfid, &nwname))
@@ -2227,7 +2227,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
             uint64_t offs;
             uint8_t *buf;
             int      n;
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wdw", &fid, &offs, &count))
                 goto protocol_error;
@@ -2251,7 +2251,7 @@ static int virtio_9p_recv_request(VIRTIODevice *s1, int queue_idx, int desc_idx,
             uint64_t offs;
             uint8_t *buf1;
             int      n;
-            FSFile * f;
+            FSFile  *f;
 
             if (unmarshall(s, queue_idx, desc_idx, &offset, "wdw", &fid, &offs, &count))
                 goto protocol_error;

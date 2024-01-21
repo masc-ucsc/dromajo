@@ -48,29 +48,29 @@
 
 #include "cutils.h"
 
-//#define DEBUG_CONFIG
+// #define DEBUG_CONFIG
 
 typedef struct {
     uint32_t       size; /* 0 means no mapping defined */
     uint8_t        type;
     uint8_t        enabled; /* true if mapping is enabled */
-    void *         opaque;
+    void          *opaque;
     PCIBarSetFunc *bar_set;
 } PCIIORegion;
 
 struct PCIDevice {
-    PCIBus *    bus;
+    PCIBus     *bus;
     uint8_t     devfn;
     IRQSignal   irq[4];
     uint8_t     config[256];
     uint8_t     next_cap_offset; /* offset of the next capability */
-    char *      name;            /* for debug only */
+    char       *name;            /* for debug only */
     PCIIORegion io_regions[PCI_NUM_REGIONS];
 };
 
 struct PCIBus {
     int            bus_num;
-    PCIDevice *    device[256];
+    PCIDevice     *device[256];
     PhysMemoryMap *mem_map;
     PhysMemoryMap *port_map;
     uint32_t       irq_state[4][8]; /* one bit per device */
@@ -85,7 +85,7 @@ static int bus_map_irq(PCIDevice *d, int irq_num) {
 
 static void pci_device_set_irq(void *opaque, int irq_num, int level) {
     PCIDevice *d = (PCIDevice *)opaque;
-    PCIBus *   b = d->bus;
+    PCIBus    *b = d->bus;
     uint32_t   mask;
     int        i, irq_level;
 
@@ -405,7 +405,7 @@ int pci_add_capability(PCIDevice *d, const uint8_t *buf, int size) {
 /* i440FX host bridge */
 
 struct I440FXState {
-    PCIBus *   pci_bus;
+    PCIBus    *pci_bus;
     PCIDevice *pci_dev;
     PCIDevice *piix3_dev;
     uint32_t   config_reg;
@@ -451,7 +451,7 @@ static uint32_t i440fx_read_data(void *opaque, uint32_t offset, int size_log2) {
 
 static void i440fx_set_irq(void *opaque, int irq_num, int irq_level) {
     I440FXState *s  = (I440FXState *)opaque;
-    PCIDevice *  hd = s->piix3_dev;
+    PCIDevice   *hd = s->piix3_dev;
     int          pic_irq;
 
     /* map to the PIC irq (different IRQs can be mapped to the same
@@ -469,7 +469,7 @@ static void i440fx_set_irq(void *opaque, int irq_num, int irq_level) {
 
 I440FXState *i440fx_init(PCIBus **pbus, int *ppiix3_devfn, PhysMemoryMap *mem_map, PhysMemoryMap *port_map, IRQSignal *pic_irqs) {
     I440FXState *s = (I440FXState *)mallocz(sizeof *s);
-    PCIBus *     b = (PCIBus *)mallocz(sizeof *b);
+    PCIBus      *b = (PCIBus *)mallocz(sizeof *b);
 
     b->bus_num  = 0;
     b->mem_map  = mem_map;
@@ -499,7 +499,7 @@ I440FXState *i440fx_init(PCIBus **pbus, int *ppiix3_devfn, PhysMemoryMap *mem_ma
 
 /* in case no BIOS is used, map the interrupts. */
 void i440fx_map_interrupts(I440FXState *s, uint8_t *elcr, const uint8_t *pci_irqs) {
-    PCIBus *   b = s->pci_bus;
+    PCIBus    *b = s->pci_bus;
     PCIDevice *d, *hd;
     int        irq_num, pic_irq, devfn, i;
 

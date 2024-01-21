@@ -51,8 +51,8 @@
 
 #include "LiveCacheCore.h"
 
-//#define MTRACE(a...)   do{ fprintf(stderr,"@%lld %s %d 0x%x:",(long long int)globalClock,getName(), (int)mreq->getID(), (unsigned
-// int)mreq->getAddr()); fprintf(stderr,##a); fprintf(stderr,"\n"); }while(0)
+// #define MTRACE(a...)   do{ fprintf(stderr,"@%lld %s %d 0x%x:",(long long int)globalClock,getName(), (int)mreq->getID(), (unsigned
+//  int)mreq->getAddr()); fprintf(stderr,##a); fprintf(stderr,"\n"); }while(0)
 #define MTRACE(a...)
 
 LiveCache::LiveCache(const std::string &_name, int size, uint64_t _mem_base, uint64_t _mem_size) : name(_name) {
@@ -94,8 +94,8 @@ LiveCache::~LiveCache() {
 }
 
 void LiveCache::read(uint64_t addr) {
-    if (addr<mem_base || addr>mem_end)
-      return; // only track between mem_base and mem_end
+    if (addr < mem_base || addr > mem_end)
+        return;  // only track between mem_base and mem_end
 
     Line *l = cacheBank->findLine(addr);
     if (l) {
@@ -104,7 +104,7 @@ void LiveCache::read(uint64_t addr) {
         return;
     }
     nReadMiss++;
-    //printf("readMiss addr:%llx\n",(addr>>6)<<6);
+    // printf("readMiss addr:%llx\n",(addr>>6)<<6);
 
     l        = cacheBank->fillLine(addr);
     l->st    = false;
@@ -112,8 +112,8 @@ void LiveCache::read(uint64_t addr) {
 }
 
 void LiveCache::write(uint64_t addr) {
-    if (addr<mem_base || addr>mem_end)
-      return; // only track between mem_base and mem_end
+    if (addr < mem_base || addr > mem_end)
+        return;  // only track between mem_base and mem_end
 
     Line *l = cacheBank->findLine(addr);
     if (l) {
@@ -132,7 +132,7 @@ void LiveCache::write(uint64_t addr) {
 
 uint64_t *LiveCache::traverse(uint64_t &n_entries) {
     // Creating an array of cache lines
-    Line *   arr[lineCount];
+    Line    *arr[lineCount];
     uint64_t cnt = 0;
     for (uint64_t i = 0; i < lineCount; i++) {
         if (cacheBank->getPLine(i) && cacheBank->getPLine(i)->order) {
@@ -181,8 +181,8 @@ void LiveCache::mergeSort(Line **arr, uint64_t len) {
 
     // divide and conquer
     uint64_t mid = (uint64_t)(len / 2);
-    Line *   arr1[mid];
-    Line *   arr2[len - mid];
+    Line    *arr1[mid];
+    Line    *arr2[len - mid];
     for (uint64_t i = 0; i < mid; i++) arr1[i] = arr[i];
     for (uint64_t i = 0; i < len - mid; i++) arr2[i] = arr[mid + i];
     mergeSort(arr1, mid);

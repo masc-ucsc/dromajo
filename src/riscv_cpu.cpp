@@ -2347,8 +2347,8 @@ static void serialize_memory(const void *base, size_t size, const char *file) {
     if (f_fd < 0)
         err(-3, "trying to write %s", file);
 
-    uint8_t *ptr          = (uint8_t *)base;
-    size_t write_size = 0;
+    uint8_t *ptr        = (uint8_t *)base;
+    size_t   write_size = 0;
     while (size) {
         ssize_t written = write(f_fd, &ptr[write_size], size);
         if (written <= 0)

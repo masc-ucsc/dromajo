@@ -195,7 +195,7 @@ static char *cmdline_subst(const char *cmdline) {
 static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str, int len) {
     int64_t     version, val;
     const char *machine_name;
-    char *      str;
+    char       *str;
     char        buf1[256];
     JSONValue   cfg, obj, el;
     p->maxinsns      = 0;
@@ -374,7 +374,7 @@ typedef struct {
     void *opaque;
 
     FSLoadFileCB *file_load_cb;
-    void *        file_load_opaque;
+    void         *file_load_opaque;
     int           file_index;
 } VMConfigLoadState;
 
