@@ -1083,8 +1083,6 @@ static int copy_kernel(RISCVMachine *s, uint8_t *fw_buf, size_t fw_buf_len, cons
         }
     }
 
-    for (int i = 0; i < s->ncpus; ++i) riscv_set_debug_mode(s->cpu_state[i], TRUE);
-
     return 0;
 }
 
@@ -1328,20 +1326,24 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
         }
     }
 
-    if (!p->files[VM_FILE_BIOS].buf) {
-        vm_error("No bios given\n");
-        return NULL;
-    } else if (copy_kernel(s,
-                           p->files[VM_FILE_BIOS].buf,
-                           p->files[VM_FILE_BIOS].len,
-                           p->files[VM_FILE_KERNEL].buf,
-                           p->files[VM_FILE_KERNEL].len,
-                           p->files[VM_FILE_INITRD].buf,
-                           p->files[VM_FILE_INITRD].len,
-                           p->bootrom_name,
-                           p->dtb_name,
-                           p->cmdline))
-        return NULL;
+    if (s->common.snapshot_load_name==nullptr) {
+      if (!p->files[VM_FILE_BIOS].buf) {
+          vm_error("No bios given\n");
+          return NULL;
+      } else if (copy_kernel(s,
+                            p->files[VM_FILE_BIOS].buf,
+                            p->files[VM_FILE_BIOS].len,
+                            p->files[VM_FILE_KERNEL].buf,
+                            p->files[VM_FILE_KERNEL].len,
+                            p->files[VM_FILE_INITRD].buf,
+                            p->files[VM_FILE_INITRD].len,
+                            p->bootrom_name,
+                            p->dtb_name,
+                            p->cmdline))
+          return NULL;
+    }
+
+    for (int i = 0; i < s->ncpus; ++i) riscv_set_debug_mode(s->cpu_state[i], TRUE);
 
     /* interrupts and exception setup for cosim */
     s->common.cosim             = false;
@@ -1362,6 +1364,9 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
 }
 
 RISCVMachine *virt_machine_load(const VirtMachineParams *p, RISCVMachine *s) {
+    if (s->common.snapshot_load_name)
+        return s; // no need if loading a checkpoint
+
     if (!p->files[VM_FILE_BIOS].buf) {
         vm_error("No bios given\n");
         return NULL;

@@ -436,6 +436,7 @@ static void config_load_file_cb(void *opaque, int err, void *data, size_t size) 
 #endif
 
 static void config_load_file(VMConfigLoadState *s, const char *filename, FSLoadFileCB *cb, void *opaque) {
+
     //    printf("loading %s\n", filename);
 #ifdef CONFIG_FS_NET
     if (is_url(filename)) {

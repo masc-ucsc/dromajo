@@ -55,6 +55,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <string>
+
 #include "dromajo.h"
 #ifndef __APPLE__
 #include <linux/if_tun.h>
@@ -611,6 +613,20 @@ static bool load_elf_and_fake_the_config(VirtMachineParams *p, const char *path)
     return false;
 }
 
+size_t get_file_size(const std::string &filename) {
+  FILE* file = fopen(filename.c_str(), "rb"); // Open the file in binary mode
+  if (file == nullptr) {
+    perror("Error opening file");
+    return -1;
+  }
+
+  fseek(file, 0, SEEK_END); // Seek to the end of the file
+  size_t size = ftell(file); // Get the current file pointer position
+  fclose(file); // Close the file
+
+  return size;
+}
+
 RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *prog                     = argv[0];
     char       *snapshot_load_name       = 0;
@@ -857,8 +873,8 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
         }
     }
 
-    if (optind >= argc)
-        usage(prog, "missing config file");
+    if (optind >= argc && snapshot_load_name==nullptr)
+        usage(prog, "missing config file or load checkpoint");
     else
         path = argv[optind++];
 
@@ -867,7 +883,6 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
             usage(prog, "too many arguments");
     */
 
-    assert(path);
     BlockDeviceModeEnum drive_mode = BF_MODE_SNAPSHOT;
     VirtMachineParams   p_s, *p = &p_s;
 
@@ -876,10 +891,16 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     fs_wget_init();
 #endif
 
-    if (!load_elf_and_fake_the_config(p, path)) {
-        virt_machine_load_config_file(p, path, NULL, NULL);
-    } else {
-        elf_based = true;
+    if (snapshot_load_name == nullptr) {
+        assert(path);
+        if (!load_elf_and_fake_the_config(p, path)) {
+            virt_machine_load_config_file(p, path, NULL, NULL);
+        } else {
+            elf_based = true;
+        }
+    }else{
+        std::string ram_file(snapshot_load_name);
+        p->ram_size = get_file_size(ram_file + ".mainram"); 
     }
 
     if (p->logfile) {
@@ -1012,6 +1033,11 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     p->custom_extension = custom_extension;
     p->clear_ids        = clear_ids;
 
+    // Overwrite the value specified in the configuration file
+    if (snapshot_load_name) {
+        p->snapshot_load_name = snapshot_load_name;
+    }
+
     RISCVMachine *s = virt_machine_init(p);
     if (!s)
         return NULL;
@@ -1036,11 +1062,6 @@ RISCVMachine *virt_machine_main(int argc, char *argv[]) {
         s = virt_machine_load(p, s);
         if (!s)
             return NULL;
-    }
-
-    // Overwrite the value specified in the configuration file
-    if (snapshot_load_name) {
-        s->common.snapshot_load_name = snapshot_load_name;
     }
 
     if (simpoint_file) {
