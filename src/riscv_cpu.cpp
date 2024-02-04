@@ -2371,7 +2371,7 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
     int64_t  pending_size = size;
     do {
         /* Linux reads in 2GB chunks at most. */
-        size_t sz = read(f_fd, &ptr[read_size], pending_size);
+        size_t sz = read(f_fd, &ptr[read_size], pending_size > 8 * 1024 * 1024 ? 8 * 1024 * 1024 : pending_size);
         if (sz <= 0) {
             err(-3, "%s %zd size failed to read memory size %zd", file, sz, size);
             break;
