@@ -55,8 +55,8 @@
 #define stringify(s) tostring(s)
 #define tostring(s)  #s
 
-#ifndef offsetof
-#define offsetof(type, field) ((size_t) & ((type *)0)->field)
+#ifndef cutil_offsetof
+#define cutil_offsetof(type, field) ((size_t) & ((type *)0)->field)
 #endif
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
