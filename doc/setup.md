@@ -51,11 +51,15 @@ because it is sensitive with the cross compiler build options and it is easier
 to just build it. The libc library setup is muslc.
 
 ```
-wget https://github.com/buildroot/buildroot/archive/refs/tags/2021.08.tar.gz
+wget https://github.com/buildroot/buildroot/archive/refs/tags/2024.11.1.tar.gz
+# earlier version: wget https://github.com/buildroot/buildroot/archive/refs/tags/2021.08.tar.gz
 # earlier version: wget https://github.com/buildroot/buildroot/archive/2020.05.1.tar.gz
-tar xvf 2021.08.tar.gz
-mv buildroot-2021.08 buildroot
-cp config-buildroot-2021.08 buildroot/.config
+tar xzvf 2024.11.1.tar.gz
+# tar xvf 2021.08.tar.gz
+mv buildroot-2024.11.1/ buildroot
+# mv buildroot-2021.08 buildroot
+cp config-buildroot-2024.11.1 buildroot/.config
+#cp config-buildroot-2021.08 buildroot/.config
 make -j$(nproc) -C buildroot
 ```
 
