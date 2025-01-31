@@ -200,7 +200,7 @@ static int iterate_core(RISCVMachine *m, int hartid, int n_cycles) {
     uint32_t insn_raw = -1;
     bool     do_trace = false;
     (void)riscv_read_insn(cpu, &insn_raw, last_pc);
-#ifndef NDEBUG
+#if 0
     static int      counter    = 0;
     static uint64_t x_last_pc  = 0;
     static uint32_t x_insn_raw = 0;
