@@ -98,7 +98,7 @@ make -C linux ARCH=riscv -j$(nproc)
 export CROSS_COMPILE=riscv64-linux-gnu-
 git clone https://github.com/riscv-software-src/opensbi.git
 cd opensbi
-git checkout tags/v0.9 -b temp2
+#git checkout tags/v0.9 -b temp2
 # earlier version: git checkout bd355213bfbb209c047e8cc0df56936f6705477f -b temp
 make PLATFORM=generic
 cd ..

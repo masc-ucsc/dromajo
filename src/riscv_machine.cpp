@@ -664,6 +664,38 @@ void fdt_end(FDTState *s) {
     free(s);
 }
 
+static int misa_extension_imp(char ext, unsigned long misa) {
+
+  if ('A' <= ext && ext <= 'Z')
+    return misa & (1 << (ext - 'A'));
+  if ('a' <= ext && ext <= 'z')
+    return misa & (1 << (ext - 'a'));
+
+  return 0;
+}
+
+static void misa_string(char *out, unsigned int out_sz, unsigned long misa) {
+	unsigned int i, pos = 0;
+	const char valid_isa_order[] = "iemafdqclbjtpvnhkorwxyzg";
+
+	assert(out);
+
+  if (5 <= (out_sz - pos)) {
+    out[pos++] = 'r';
+    out[pos++] = 'v';
+    out[pos++] = '6';
+    out[pos++] = '4';
+  }
+
+	for (i = 0; i < sizeof(valid_isa_order) && (pos < out_sz); i++) {
+		if (misa_extension_imp(valid_isa_order[i], misa))
+			out[pos++] = valid_isa_order[i];
+	}
+
+	if (pos < out_sz)
+		out[pos++] = '\0';
+}
+
 static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, const char *cmd_line, uint64_t initrd_start,
                            uint64_t initrd_end) {
     FDTState *s = 0;
@@ -671,7 +703,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
     if (!dtb_name) {
         int       intc_phandle = 0;
         int       max_xlen, i, cur_phandle;
-        char      isa_string[128], *q;
+        char      isa_string[128];
         uint32_t  misa;
         uint32_t  tab[4 * MAX_CPUS];
         FBDevice *fb_dev;
@@ -704,13 +736,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 
             max_xlen = 64;
             misa     = riscv_cpu_get_misa(m->cpu_state[hartid]);
-            q        = isa_string;
-            q += snprintf(isa_string, sizeof(isa_string), "rv%d", max_xlen);
-            for (i = 0; i < 26; ++i) {
-                if (misa & (1 << i))
-                    *q++ = 'a' + i;
-            }
-            *q = '\0';
+            misa_string(isa_string, sizeof(isa_string), misa);
             fdt_prop_str(s, "riscv,isa", isa_string);
 
             fdt_prop_str(s, "mmu-type", max_xlen <= 32 ? "riscv,sv32" : "riscv,sv48");

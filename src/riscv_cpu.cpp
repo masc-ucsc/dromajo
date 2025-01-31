@@ -2208,7 +2208,7 @@ RISCVCPUState *riscv_cpu_init(RISCVMachine *machine, int hartid) {
 #endif
 #if VLEN > 0
     clear_most_recently_written_vregs(s);
-    s->misa |= MCPUID_V;
+    // FIXME: Vector not finished s->misa |= MCPUID_V;
 #endif
     s->misa |= MCPUID_C;
 
