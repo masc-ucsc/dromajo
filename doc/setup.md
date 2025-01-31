@@ -74,12 +74,15 @@ make -j$(nproc) -C buildroot
 
 ### Get the Linux kernel up and running (~ 3 min)
 
+WARNING: It is easier to build the Linux kernel using the buildroot
+
 Assumption: you have the `riscv64-linux-gnu-` (GlibC) toolchain.
 
 If not and you built the buildroot, you may be able to reuse the buildroot gcc installed by
 adding `buildroot/output/host/bin` to your path, and use the
 riscv64-linux-gcc (fix the CROSS_COMPILE to use riscv64-linux- instead of
 riscv64-linux-gnu-)
+
 
 ```
 export CROSS_COMPILE=riscv64-linux-gnu-
