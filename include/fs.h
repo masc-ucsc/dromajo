@@ -165,7 +165,7 @@ typedef struct {
     uint64_t start;
     uint64_t length;
     uint32_t proc_id;
-    char *   client_id;
+    char    *client_id;
 } FSLock;
 
 typedef void FSOpenCompletionFunc(FSDevice *fs, FSQID *qid, int err, void *opaque);

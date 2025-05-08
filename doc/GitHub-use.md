@@ -128,13 +128,13 @@ https://github.com/chipsalliance/dromajo/fork ) the dromajo repo.
     git fetch upstream
 
     # Make sure that you are in origin/master
-    git checkout master
+    git checkout origin/master
 
     # Bring the changes from the remote upstream/master to local master/origin
     git merge upstream/master
 
     # Push to repo origin/master if everything was fine
-    git push origin master
+    git push origin HEAD:master
 
     # To see the difference with upstream (it should be empty)
     git diff @{upstream}

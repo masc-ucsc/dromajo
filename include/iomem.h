@@ -49,7 +49,7 @@ typedef uint32_t DeviceReadFunc(void *opaque, uint32_t offset, int size_log2);
 #define DEVIO_SIZE16 (1 << 1)
 #define DEVIO_SIZE32 (1 << 2)
 /* not supported, could add specific 64 bit callbacks when needed */
-//#define DEVIO_SIZE64 (1 << 3)
+// #define DEVIO_SIZE64 (1 << 3)
 #define DEVIO_DISABLED (1 << 4)
 
 #define DEVRAM_FLAG_ROM        (1 << 0) /* not writable */
@@ -68,14 +68,14 @@ typedef struct {
     BOOL           is_ram;
     /* the following is used for RAM access */
     int       devram_flags;
-    uint8_t * phys_mem;
+    uint8_t  *phys_mem;
     int       dirty_bits_size; /* in bytes */
     uint32_t *dirty_bits;      /* NULL if not used */
     uint32_t *dirty_bits_tab[2];
     int       dirty_bits_index; /* 0-1 */
     /* the following is used for I/O access */
-    void *           opaque;
-    DeviceReadFunc * read_func;
+    void            *opaque;
+    DeviceReadFunc  *read_func;
     DeviceWriteFunc *write_func;
     int              devio_flags;
 } PhysMemoryRange;
@@ -93,9 +93,9 @@ struct PhysMemoryMap {
     void (*flush_tlb_write_range)(void *opaque, uint8_t *ram_addr, size_t ram_size);
 };
 
-PhysMemoryMap *                phys_mem_map_init(void);
+PhysMemoryMap                 *phys_mem_map_init(void);
 void                           phys_mem_map_end(PhysMemoryMap *s);
-PhysMemoryRange *              register_ram_entry(PhysMemoryMap *s, uint64_t addr, uint64_t size, int devram_flags);
+PhysMemoryRange               *register_ram_entry(PhysMemoryMap *s, uint64_t addr, uint64_t size, int devram_flags);
 static inline PhysMemoryRange *cpu_register_ram(PhysMemoryMap *s, uint64_t addr, uint64_t size, int devram_flags) {
     return s->register_ram(s, addr, size, devram_flags);
 }
@@ -136,7 +136,7 @@ typedef void SetIRQFunc(void *opaque, int irq_num, int level);
 
 typedef struct {
     SetIRQFunc *set_irq;
-    void *      opaque;
+    void       *opaque;
     int         irq_num;
 } IRQSignal;
 

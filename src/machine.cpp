@@ -85,6 +85,21 @@ int vm_get_int(JSONValue obj, const char *name, int64_t *pval) {
     return 0;
 }
 
+static void vm_get_int_opt(JSONValue obj, const char *name, int64_t *pval) {
+    JSONValue val = json_object_get(obj, name);
+
+    if (json_is_undefined(val)) {
+        return;
+    }
+
+    if (val.type != JSON_INT) {
+        vm_error("%s: integer expected\n", name);
+        return;
+    }
+
+    *pval = val.u.int64;
+}
+
 static void vm_get_uint64_opt(JSONValue obj, const char *name, uint64_t *pval) {
     JSONValue val = json_object_get(obj, name);
 
@@ -180,10 +195,11 @@ static char *cmdline_subst(const char *cmdline) {
 static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str, int len) {
     int64_t     version, val;
     const char *machine_name;
-    char *      str;
+    char       *str;
     char        buf1[256];
     JSONValue   cfg, obj, el;
     p->maxinsns      = 0;
+    p->skip_insns    = 0;
     p->dump_memories = false;
 
     cfg = json_parse_value_len(config_file_str, len);
@@ -233,7 +249,8 @@ static int virt_machine_parse_config(VirtMachineParams *p, char *config_file_str
     }
 
     vm_get_uint64_opt(cfg, "htif_base_addr", &p->htif_base_addr);
-    vm_get_uint64_opt(cfg, "maxinsns", &p->maxinsns);
+    vm_get_int_opt(cfg, "maxinsns", &p->maxinsns);
+    vm_get_uint64_opt(cfg, "skip_insns", &p->skip_insns);
 
     if (vm_get_str_opt(cfg, "load", &p->snapshot_load_name) < 0)
         goto tag_fail;
@@ -357,7 +374,7 @@ typedef struct {
     void *opaque;
 
     FSLoadFileCB *file_load_cb;
-    void *        file_load_opaque;
+    void         *file_load_opaque;
     int           file_index;
 } VMConfigLoadState;
 
@@ -419,6 +436,7 @@ static void config_load_file_cb(void *opaque, int err, void *data, size_t size) 
 #endif
 
 static void config_load_file(VMConfigLoadState *s, const char *filename, FSLoadFileCB *cb, void *opaque) {
+
     //    printf("loading %s\n", filename);
 #ifdef CONFIG_FS_NET
     if (is_url(filename)) {

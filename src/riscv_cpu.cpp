@@ -98,6 +98,8 @@ void log_vprintf(const char *fmt, va_list ap) {
 void log_vprintf(const char *fmt, va_list ap) { vprintf(fmt, ap); }
 #endif
 
+int roi_region = 0;  // start without ROI enabled
+
 void __attribute__((format(printf, 1, 2))) log_printf(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -163,7 +165,7 @@ static inline uint64_t track_dread(RISCVCPUState *s, uint64_t vaddr, uint64_t pa
     s->machine->llc->read(paddr);
 #endif
     s->last_data_paddr = paddr;
-    // printf("track.ld[%llx:%llx]=%llx\n", paddr, paddr+size-1, data);
+    // fprintf(stderr,"track.ld[%llx:%llx]=%llx vaddr=%llx\n", paddr, paddr+size-1, data, vaddr);
 
     return data;
 }
@@ -284,7 +286,6 @@ static inline bool check_triggers(RISCVCPUState *s, target_ulong t_mctl, target_
             return 0;                                                                                \
         }                                                                                            \
         uint_type pval = *(uint_type *)(pr->phys_mem + (uintptr_t)(paddr - pr->addr));               \
-        pval           = track_dread(s, paddr, paddr, pval, size);                                   \
         *fail          = false;                                                                      \
         return pval;                                                                                 \
     }
@@ -483,7 +484,7 @@ int riscv_cpu_get_phys_addr(RISCVCPUState *s, target_ulong vaddr, riscv_memory_a
 no_inline int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_ulong addr, int size_log2) {
     int              size, tlb_idx, err, al;
     target_ulong     paddr, offset;
-    uint8_t *        ptr;
+    uint8_t         *ptr;
     PhysMemoryRange *pr;
     mem_uint_t       ret;
     bool             pmp_blocked = false;
@@ -632,7 +633,7 @@ no_inline int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_u
 no_inline int riscv_cpu_write_memory(RISCVCPUState *s, target_ulong addr, mem_uint_t val, int size_log2) {
     int              size, i, tlb_idx, err;
     target_ulong     paddr, offset;
-    uint8_t *        ptr;
+    uint8_t         *ptr;
     PhysMemoryRange *pr;
     bool             pmp_blocked = false;
 
@@ -733,7 +734,7 @@ static uint32_t get_insn32(uint8_t *ptr) { return ((struct unaligned_u32 *)ptr)-
 static no_inline __must_use_result int target_read_insn_slow(RISCVCPUState *s, uint32_t *insn, int size, target_ulong addr) {
     int              tlb_idx;
     target_ulong     paddr;
-    uint8_t *        ptr;
+    uint8_t         *ptr;
     PhysMemoryRange *pr;
     bool             pmp_blocked = false;
 
@@ -1116,7 +1117,7 @@ bool vectorize_arithmetic(RISCVCPUState *s, uint8_t vs2, uint8_t vd, target_ulon
         }
     }
     uint8_t *vs2_ptr;
-    void *   vs1_ptr      = &vs1;  // precalculate vs1 value if not vv operation
+    void    *vs1_ptr      = &vs1;  // precalculate vs1 value if not vv operation
     int      byte_advance = sew / 8;
     int      vec_size     = VLEN / sew;
     int      vs2_mod, vs1_mod, vs2_elm_mod, vs1_elm_mod;  // narrowing/widening modifiers set vs2/vs1 relative to vd
@@ -1474,9 +1475,7 @@ static int csr_read(RISCVCPUState *s, uint32_t funct3, target_ulong *pval, uint3
         case CSR_PMPADDR(13):
         case CSR_PMPADDR(14):
         case CSR_PMPADDR(15): val = s->csr_pmpaddr[csr - CSR_PMPADDR(0)]; break;
-#ifdef SIMPOINT_BB
         case 0x8C2: val = 0; break;
-#endif
 
         default:
         invalid_csr:
@@ -1872,29 +1871,27 @@ static int csr_write(RISCVCPUState *s, uint32_t funct3, uint32_t csr, target_ulo
         case 0xb1f:
             // Allow, but ignore to write to performance counters mhpmcounter
             break;
-#ifdef SIMPOINT_BB
         case 0x8C2:
             if ((val & 3) == 3) {
-                fprintf(dromajo_stderr, "simpoint adjust maxinsns to %lld\n", (long long)val >> 2);
+                fprintf(dromajo_stderr, "ROI adjust maxinsns to %lld\n", (long long)val >> 2);
                 s->machine->common.maxinsns = val >> 2;
             } else if ((val & 3) == 2) {
-                fprintf(dromajo_stderr, "simpoint terminate\n");
+                fprintf(dromajo_stderr, "ROI terminate (insn=%" PRIu64 "\n", s->insn_counter);
                 s->benchmark_exit_code  = val >> 2;
                 s->terminate_simulation = 1;
-            } else if ((val & 1) && simpoint_roi) {
-                fprintf(dromajo_stderr, "simpoint ROI already started\n");
-            } else if ((val & 1) == 0 && simpoint_roi) {
-                fprintf(dromajo_stderr, "simpoint ROI finished\n");
-                simpoint_roi = 0;
-            } else if ((val & 1) == 0 && simpoint_roi == 0) {
-                fprintf(dromajo_stderr, "simpoint ROI already finished\n");
+            } else if ((val & 1) && roi_region) {
+                fprintf(dromajo_stderr, "ROI already started (insn=%" PRIu64 ")\n", s->insn_counter);
+            } else if ((val & 1) == 0 && roi_region) {
+                fprintf(dromajo_stderr, "ROI finished (insn=%" PRIu64 ")\n", s->insn_counter);
+                roi_region = 0;
+            } else if ((val & 1) == 0 && roi_region == 0) {
+                fprintf(dromajo_stderr, "ROI already finished (insn=%" PRIu64 ")\n", s->insn_counter);
             } else {
-                fprintf(dromajo_stderr, "simpoint ROI started\n");
-                simpoint_roi = 1;
+                fprintf(dromajo_stderr, "ROI started (insn=%" PRIu64 ")\n", s->insn_counter);
+                roi_region = 1;
             }
 
             break;
-#endif
 
         default:
 
@@ -2044,7 +2041,12 @@ static inline uint32_t get_pending_irq_mask(RISCVCPUState *s) {
     uint32_t pending_ints, enabled_ints;
 
 #ifdef DUMP_INTERRUPTS
-    fprintf(dromajo_stderr, "get_irq_mask: mip=0x%x mie=0x%x mideleg=0x%x\n", s->mip, s->mie, s->mideleg);
+    fprintf(dromajo_stderr,
+            "get_irq_mask: mip=0x%x mie=0x%x mideleg=0x%x hartid=%d\n",
+            s->mip,
+            s->mie,
+            s->mideleg,
+            (int)s->mhartid);
 #endif
 
     pending_ints = s->mip & s->mie;
@@ -2206,7 +2208,7 @@ RISCVCPUState *riscv_cpu_init(RISCVMachine *machine, int hartid) {
 #endif
 #if VLEN > 0
     clear_most_recently_written_vregs(s);
-    s->misa |= MCPUID_V;
+    // FIXME: Vector not finished s->misa |= MCPUID_V;
 #endif
     s->misa |= MCPUID_C;
 
@@ -2245,6 +2247,14 @@ void riscv_cpu_end(RISCVCPUState *s) { free(s); }
 void riscv_set_pc(RISCVCPUState *s, uint64_t val) { s->pc = val & (s->misa & MCPUID_C ? ~1 : ~3); }
 
 uint64_t riscv_get_pc(RISCVCPUState *s) { return s->pc; }
+
+uint64_t riscv_read_u8(RISCVCPUState *s, uint64_t addr) {
+    uint8_t tmp;
+    if (target_read_u8(s, &tmp, addr))
+        return -1;
+
+    return tmp;
+}
 
 uint64_t riscv_get_reg(RISCVCPUState *s, int rn) {
     assert(0 <= rn && rn < 32);
@@ -2337,14 +2347,14 @@ static void serialize_memory(const void *base, size_t size, const char *file) {
     if (f_fd < 0)
         err(-3, "trying to write %s", file);
 
-    char *potr = (char *)base;
-
+    uint8_t *ptr        = (uint8_t *)base;
+    size_t   write_size = 0;
     while (size) {
-        ssize_t written = write(f_fd, potr, size);
+        ssize_t written = write(f_fd, &ptr[write_size], size);
         if (written <= 0)
             err(-3, "while writing %s", file);
         size -= written;
-        potr += written;
+        write_size += written;
     }
 
     close(f_fd);
@@ -2356,14 +2366,28 @@ static void deserialize_memory(void *base, size_t size, const char *file) {
     if (f_fd < 0)
         err(-3, "trying to read %s", file);
 
-    char *potr = (char *)base;
-    while (size) {
-      ssize_t sz = read(f_fd, potr, size);
-      if (sz < 0)
-        err(-3, "%s %zd size does not match memory size %zd", file, sz, size);
-      size -= sz;
-      potr += sz;
-    }
+    size_t   read_size    = 0;
+    uint8_t *ptr          = (uint8_t *)base;
+    int64_t  pending_size = size;
+    do {
+        /* Linux reads in 2GB chunks at most. */
+        size_t sz = read(f_fd, &ptr[read_size], pending_size > 8 * 1024 * 1024 ? 8 * 1024 * 1024 : pending_size);
+        if (sz <= 0) {
+            err(-3, "%s %zd size failed to read memory size %zd", file, sz, size);
+            break;
+        }
+
+        if (sz < 0 || sz > size) {
+            err(-3, "%s %zd size does not fit in memory size %zd", file, sz, size);
+            break;
+        }
+
+        read_size += sz;
+        pending_size -= sz;
+    } while (pending_size > 0);
+
+    if (read_size != size)
+        err(-3, "%s %zd size does not match memory size %zd", file, read_size, size);
 
     close(f_fd);
 }
@@ -2379,12 +2403,9 @@ static uint32_t create_auipc(int rd, uint32_t addr) {
     return 0x17 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
 }
 
-/*
- * Might use it one day, but GCC doesn't like unused static functions
- * static uint32_t create_lui(int rd, uint32_t addr) {
- *     return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12);
- * }
- */
+#ifdef LIVECACHE
+static uint32_t create_lui(int rd, uint32_t addr) { return 0x37 | ((rd & 0x1F) << 7) | ((addr >> 12) << 12); }
+#endif
 
 static uint32_t create_addi(int rd, uint32_t addr) {
     uint32_t pos = addr & 0xFFF;
@@ -2482,7 +2503,7 @@ static void create_csr64_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t *d
     rom[(*code_pos)++] = create_ld(1, 1);
     rom[(*code_pos)++] = create_csrrw(1, csrn);
 
-    rom[(*data_pos)++] = val & 0xFFFFFFFF;
+    rom[(*data_pos)++] = val;
     rom[(*data_pos)++] = val >> 32;
 }
 
@@ -2518,31 +2539,10 @@ static void create_io64_recovery(uint32_t *rom, uint32_t *code_pos, uint32_t *da
     rom[(*data_pos)++] = val >> 32;
 }
 
-static void create_hang_nonzero_hart(uint32_t *rom, uint32_t *code_pos, uint32_t *data_pos) {
-    /* Note, this matches the boot loader prologue from copy_kernel() */
-
-    rom[(*code_pos)++] = 0xf1402573;  // start:  csrr   a0, mhartid
-    rom[(*code_pos)++] = 0x00050663;  //         beqz   a0, 1f
-    rom[(*code_pos)++] = 0x10500073;  // 0:      wfi
-    rom[(*code_pos)++] = 0xffdff06f;  //         j      0b
-                                      // 1:
-}
-
-static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t clint_base_addr) {
-    uint32_t rom[ROM_SIZE / 4];
-    memset(rom, 0, sizeof rom);
-
-    // ROM organization
-    // 0000..003F wasted
-    // 0040..0AFF boot code (2,752 B)
-    // 0B00..0FFF boot data (  512 B)
-
-    uint32_t code_pos       = (BOOT_BASE_ADDR - ROM_BASE_ADDR) / sizeof *rom;
-    uint32_t data_pos       = 0xB00 / sizeof *rom;
+void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s,
+                            const uint64_t clint_base_addr) {
+    /* Remember the start position for boundry checks. */
     uint32_t data_pos_start = data_pos;
-
-    if (s->machine->ncpus == 1)  // FIXME: May be interesting to freeze hartid >= ncpus
-        create_hang_nonzero_hart(rom, &code_pos, &data_pos);
 
     create_csr64_recovery(rom, &code_pos, &data_pos, 0x7b1, s->pc);  // Write to DPC (CSR, 0x7b1)
 
@@ -2562,20 +2562,22 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     uint64_t  n_addr         = 0;
     uint64_t  n_addr_to_skip = 0;
     uint64_t *addr           = s->machine->llc->traverse(n_addr);
+    // reserve 1K * nCPUS for default data + used data
+    uint64_t n_bytes_space_left = ROM_SIZE - 1024 * s->machine->ncpus - data_pos * sizeof(*rom);
 
-    if (n_addr > (ROM_SIZE - 1024)) {
+    if (n_addr >= n_bytes_space_left / 8) {
         fprintf(stderr,
-                "LiveCache: truncating boot rom from %d to %d (you may want to increase ROM_SIZE for better warmup)\n",
+                "LiveCache: truncating boot rom from %" PRIu64 " to %d (you may want to increase ROM_SIZE for better warmup)\n",
                 n_addr,
                 ROM_SIZE - 1024);
-        n_addr_to_skip = n_addr - (ROM_SIZE - 1024);
+        n_addr_to_skip = 1 + n_addr - n_bytes_space_left / 8;
     }
     uint32_t n_entries = n_addr - n_addr_to_skip;
 
     create_warmup_loop(rom, &code_pos, &data_pos, n_entries);
     for (size_t i = n_addr_to_skip; i < n_addr; ++i) {
         uint64_t a = addr[i] & ~0x1ULL;
-        printf("addr:%llx %s\n", (unsigned long long)a, (addr[i] & 1) ? "ST" : "LD");
+        // printf("addr:%llx %s\n", (unsigned long long)a, (addr[i] & 1) ? "ST" : "LD");
         create_warmup_data(rom, &data_pos, addr[i]);
     }
 #endif
@@ -2658,7 +2660,7 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
             s->mcycle / RTC_FREQ_DIV);
 
     // Assuming 16 ratio between CPU and CLINT and that CPU is reset to zero
-    create_io64_recovery(rom, &code_pos, &data_pos, clint_base_addr + 0x4000, s->timecmp);
+    create_io64_recovery(rom, &code_pos, &data_pos, clint_base_addr + 0x4000 + (s->mhartid << 3), s->timecmp);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0xb02, s->minstret);
     create_csr64_recovery(rom, &code_pos, &data_pos, 0xb00, s->mcycle);
 
@@ -2676,22 +2678,46 @@ static void create_boot_rom(RISCVCPUState *s, const char *file, const uint64_t c
     // dret 0x7b200073
     rom[code_pos++] = 0x7b200073;
 
-    if (sizeof rom / sizeof *rom <= data_pos || data_pos_start <= code_pos) {
+    if (rom_size <= data_pos || data_pos_start <= code_pos) {
         fprintf(dromajo_stderr,
                 "ERROR: ROM is too small. ROM_SIZE should increase.  "
-                "Current code_pos=%d data_pos=%d\n",
-                code_pos,
-                data_pos);
+                "Current %dbytes for code and %dbytes for data\n",
+                code_pos * 4,
+                (data_pos - data_pos_start) * 4);
         exit(-6);
     }
+}
 
-    serialize_memory(rom, ROM_SIZE, file);
+void create_boot_rom_image(uint32_t *rom, uint32_t rom_size_bytes, const char *file_name) {
+    // Write ROM.
+    serialize_memory(rom, rom_size_bytes, file_name);
+}
+
+void riscv_ram_serialize(RISCVCPUState *s, const char *dump_name) {
+    bool is_ram_found = false;
+    for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
+        PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
+        if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
+            assert(!is_ram_found);
+            is_ram_found = true;
+
+            char *f_name = (char *)alloca(strlen(dump_name) + 64);
+            sprintf(f_name, "%s.mainram", dump_name);
+
+            serialize_memory(pr->phys_mem, pr->size, f_name);
+        }
+    }
+
+    if (!is_ram_found) {
+        fprintf(dromajo_stderr, "ERROR: could not find main RAM.\n");
+        exit(-3);
+    }
 }
 
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr) {
-    FILE * conf_fd   = 0;
+    FILE  *conf_fd   = 0;
     size_t n         = strlen(dump_name) + 64;
-    char * conf_name = (char *)alloca(n);
+    char  *conf_name = (char *)alloca(n);
     snprintf(conf_name, n, "%s.re_regs", dump_name);
 
     conf_fd = fopen(conf_name, "w");
@@ -2746,50 +2772,18 @@ void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t
 
     for (int i = 0; i < 4; i += 2) fprintf(conf_fd, "pmpcfg%d:%llx\n", i, (unsigned long long)s->csr_pmpcfg[i]);
     for (int i = 0; i < 16; ++i) fprintf(conf_fd, "pmpaddr%d:%llx\n", i, (unsigned long long)s->csr_pmpaddr[i]);
+}
 
-    PhysMemoryRange *boot_ram       = 0;
-    int              main_ram_found = 0;
-
+void riscv_ram_deserialize(RISCVCPUState *s, const char *dump_name) {
     for (int i = s->mem_map->n_phys_mem_range - 1; i >= 0; --i) {
         PhysMemoryRange *pr = &s->mem_map->phys_mem_range[i];
-        fprintf(conf_fd, "mrange%d:0x%llx 0x%llx %s\n", i, (long long)pr->addr, (long long)pr->size, pr->is_ram ? "ram" : "io");
+        if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
+            size_t n         = strlen(dump_name) + 64;
+            char  *main_name = (char *)alloca(n);
+            snprintf(main_name, n, "%s.mainram", dump_name);
 
-        if (pr->is_ram && pr->addr == ROM_BASE_ADDR) {
-            assert(!boot_ram);
-            boot_ram = pr;
-
-        } else if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
-            assert(!main_ram_found);
-            main_ram_found = 1;
-
-            char *f_name = (char *)alloca(strlen(dump_name) + 64);
-            sprintf(f_name, "%s.mainram", dump_name);
-
-            serialize_memory(pr->phys_mem, pr->size, f_name);
+            deserialize_memory(pr->phys_mem, pr->size, main_name);
         }
-    }
-
-    if (!boot_ram || !main_ram_found) {
-        fprintf(dromajo_stderr, "ERROR: could not find boot and main ram???\n");
-        exit(-3);
-    }
-
-    n            = strlen(dump_name) + 64;
-    char *f_name = (char *)alloca(n);
-    snprintf(f_name, n, "%s.bootram", dump_name);
-
-    if (s->priv != 3 || ROM_BASE_ADDR + ROM_SIZE < s->pc) {
-        fprintf(dromajo_stderr, "NOTE: creating a new boot rom\n");
-        create_boot_rom(s, f_name, clint_base_addr);
-    } else if (BOOT_BASE_ADDR < s->pc) {
-        fprintf(dromajo_stderr, "ERROR: could not checkpoint when running inside the ROM\n");
-        exit(-4);
-    } else if (s->pc == BOOT_BASE_ADDR && boot_ram) {
-        fprintf(dromajo_stderr, "NOTE: using the default dromajo ROM\n");
-        serialize_memory(boot_ram->phys_mem, boot_ram->size, f_name);
-    } else {
-        fprintf(dromajo_stderr, "ERROR: unexpected PC address 0x%llx\n", (long long)s->pc);
-        exit(-4);
     }
 }
 
@@ -2799,17 +2793,10 @@ void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name) {
 
         if (pr->is_ram && pr->addr == ROM_BASE_ADDR) {
             size_t n         = strlen(dump_name) + 64;
-            char * boot_name = (char *)alloca(n);
+            char  *boot_name = (char *)alloca(n);
             snprintf(boot_name, n, "%s.bootram", dump_name);
 
             deserialize_memory(pr->phys_mem, pr->size, boot_name);
-
-        } else if (pr->is_ram && pr->addr == s->machine->ram_base_addr) {
-            size_t n         = strlen(dump_name) + 64;
-            char * main_name = (char *)alloca(n);
-            snprintf(main_name, n, "%s.mainram", dump_name);
-
-            deserialize_memory(pr->phys_mem, pr->size, main_name);
         }
     }
 }

@@ -246,7 +246,7 @@ int no_inline glue(riscv_cpu_interp, XLEN)(RISCVCPUState *s, int n_cycles) {
     uint32_t     opcode, insn, rd, rs1, rs2, funct3;
     int32_t      imm, cond, err;
     target_ulong addr, val, val2;
-    uint8_t *    code_ptr, *code_end;
+    uint8_t     *code_ptr, *code_end;
     target_ulong code_to_pc_addend;
     uint64_t     insn_counter_addend;
     uint64_t     insn_counter_start = s->insn_counter;

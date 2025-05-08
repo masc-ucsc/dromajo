@@ -58,14 +58,14 @@
 
 typedef struct {
     FSDevice common;
-    char *   root_path;
+    char    *root_path;
 } FSDeviceDisk;
 
 static void fs_close(FSDevice *fs, FSFile *f);
 
 struct FSFile {
     uint32_t uid;
-    char *   path; /* complete path */
+    char    *path; /* complete path */
     BOOL     is_opened;
     BOOL     is_dir;
     union {
@@ -175,7 +175,7 @@ static char *compose_path(const char *path, const char *name) {
 static int fs_attach(FSDevice *fs1, FSFile **pf, FSQID *qid, uint32_t uid, const char *uname, const char *aname) {
     FSDeviceDisk *fs = (FSDeviceDisk *)fs1;
     struct stat   st;
-    FSFile *      f;
+    FSFile       *f;
 
     if (lstat(fs->root_path, &st) != 0) {
         *pf = NULL;
@@ -188,7 +188,7 @@ static int fs_attach(FSDevice *fs1, FSFile **pf, FSQID *qid, uint32_t uid, const
 }
 
 static int fs_walk(FSDevice *fs, FSFile **pf, FSQID *qids, FSFile *f, int n, char **names) {
-    char *      path, *path1;
+    char       *path, *path1;
     struct stat st;
     int         i;
 
@@ -208,7 +208,7 @@ static int fs_walk(FSDevice *fs, FSFile **pf, FSQID *qids, FSFile *f, int n, cha
 }
 
 static int fs_mkdir(FSDevice *fs, FSQID *qid, FSFile *f, const char *name, uint32_t mode, uint32_t gid) {
-    char *      path;
+    char       *path;
     struct stat st;
 
     path = compose_path(f->path, name);
@@ -255,7 +255,7 @@ static int fs_open(FSDevice *fs, FSQID *qid, FSFile *f, uint32_t flags, FSOpenCo
 
 static int fs_create(FSDevice *fs, FSQID *qid, FSFile *f, const char *name, uint32_t flags, uint32_t mode, uint32_t gid) {
     struct stat st;
-    char *      path;
+    char       *path;
     int         ret, fd;
 
     fs_close(fs, f);
@@ -303,7 +303,7 @@ static int fs_readdir(FSDevice *fs, FSFile *f, uint64_t offset, uint8_t *buf, in
         offset = telldir(f->u.dirp);
         d_type = de->d_type;
         if (d_type == DT_UNKNOWN) {
-            char *      path;
+            char       *path;
             struct stat st;
             path = compose_path(f->path, de->d_name);
             if (lstat(path, &st) == 0) {
@@ -462,7 +462,7 @@ static int fs_link(FSDevice *fs, FSFile *df, FSFile *f, const char *name) {
 }
 
 static int fs_symlink(FSDevice *fs, FSQID *qid, FSFile *f, const char *name, const char *symgt, uint32_t gid) {
-    char *      path;
+    char       *path;
     struct stat st;
 
     path = compose_path(f->path, name);
@@ -481,7 +481,7 @@ static int fs_symlink(FSDevice *fs, FSQID *qid, FSFile *f, const char *name, con
 
 static int fs_mknod(FSDevice *fs, FSQID *qid, FSFile *f, const char *name, uint32_t mode, uint32_t major, uint32_t minor,
                     uint32_t gid) {
-    char *      path;
+    char       *path;
     struct stat st;
 
     path = compose_path(f->path, name);

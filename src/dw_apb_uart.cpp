@@ -54,7 +54,7 @@ const char *reg_name_w[10] = {"THR", "IER", "FCR", "LCR", "MCR", "?ls", "?ms", "
 #define FEATURE_DLF_SIZE                   4
 #define FEATURE_LSR_STATUS_CLEAR           0  // Both RBR Read and LSR Read clears OE, PE, FE, and BI
 
-//#define DEBUG(fmt...) fprintf(stderr, fmt)
+// #define DEBUG(fmt...) fprintf(stderr, fmt)
 #define DEBUG(fmt...) (void)0
 
 #define UART_IER_RDI  1  // Enable receiver data interrupt

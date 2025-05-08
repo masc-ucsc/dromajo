@@ -55,6 +55,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <string>
+
 #include "dromajo.h"
 #ifndef __APPLE__
 #include <linux/if_tun.h>
@@ -89,7 +91,7 @@ typedef struct {
 
 static struct termios oldtty;
 static int            old_fd0_flags;
-static STDIODevice *  global_stdio_device;
+static STDIODevice   *global_stdio_device;
 
 static void term_exit(void) {
     tcsetattr(0, TCSANOW, &oldtty);
@@ -174,7 +176,7 @@ CharacterDevice *console_init(BOOL allow_ctrlc, FILE *stdin, FILE *out) {
     term_init(allow_ctrlc);
 
     CharacterDevice *dev = (CharacterDevice *)mallocz(sizeof *dev);
-    STDIODevice *    s   = (STDIODevice *)mallocz(sizeof *s);
+    STDIODevice     *s   = (STDIODevice *)mallocz(sizeof *s);
     s->stdin             = stdin;
     s->out               = out;
     /* Note: the glibc does not properly tests the return value of
@@ -206,10 +208,10 @@ typedef enum {
 #define SECTOR_SIZE 512UL
 
 typedef struct BlockDeviceFile {
-    FILE *              f;
+    FILE               *f;
     int64_t             nb_sectors;
     BlockDeviceModeEnum mode;
-    uint8_t **          sector_table;
+    uint8_t           **sector_table;
 } BlockDeviceFile;
 
 static int64_t bf_get_sector_count(BlockDevice *bs) {
@@ -217,7 +219,7 @@ static int64_t bf_get_sector_count(BlockDevice *bs) {
     return bf->nb_sectors;
 }
 
-//#define DUMP_BLOCK_READ
+// #define DUMP_BLOCK_READ
 
 static int bf_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n, BlockDeviceCompletionFunc *cb, void *opaque) {
     BlockDeviceFile *bf = (BlockDeviceFile *)bs->opaque;
@@ -305,7 +307,7 @@ static BlockDevice *block_device_init(const char *filename, BlockDeviceModeEnum 
     fseek(f, 0, SEEK_END);
     int64_t file_size = ftello(f);
 
-    BlockDevice *    bs = (BlockDevice *)mallocz(sizeof *bs);
+    BlockDevice     *bs = (BlockDevice *)mallocz(sizeof *bs);
     BlockDeviceFile *bf = (BlockDeviceFile *)mallocz(sizeof *bf);
 
     bf->mode       = mode;
@@ -461,8 +463,8 @@ static EthernetDevice *slirp_open(void) {
     struct in_addr  host       = {.s_addr = htonl(0x0a000202)}; /* 10.0.2.2 */
     struct in_addr  dhcp       = {.s_addr = htonl(0x0a00020f)}; /* 10.0.2.15 */
     struct in_addr  dns        = {.s_addr = htonl(0x0a000203)}; /* 10.0.2.3 */
-    const char *    bootfile   = NULL;
-    const char *    vhostname  = NULL;
+    const char     *bootfile   = NULL;
+    const char     *vhostname  = NULL;
     int             restricted = 0;
 
     if (slirp_state) {
@@ -566,6 +568,7 @@ static void usage(const char *prog, const char *msg) {
             "       --simpoint reads a simpoint file to create multiple checkpoints\n"
             "       --save saves a snapshot upon exit\n"
             "       --maxinsns terminates execution after a number of instructions\n"
+            "       --skip_insns starts benchmark data collection after a number of instructions\n"
             "       --terminate-event name of the validate event to terminate execution\n"
             "       --trace start trace dump after a number of instructions. Trace disabled by default\n"
             "       --ignore_sbi_shutdown continue simulation even upon seeing the SBI_SHUTDOWN call\n"
@@ -579,6 +582,7 @@ static void usage(const char *prog, const char *msg) {
             "       --plic START:SIZE set PLIC start address and size in B (defaults to 0x%lx:0x%lx)\n"
             "       --clint START:SIZE set CLINT start address and size in B (defaults to 0x%lx:0x%lx)\n"
             "       --custom_extension add X extension to misa for all cores\n"
+            "       --gdbinit <portname> initialize dromajo with gdb and start listening on localhost:<portname>\n"
 #ifdef LIVECACHE
             "       --live_cache_size live cache warmup for checkpoint (default 8M)\n"
 #endif
@@ -617,21 +621,36 @@ static bool load_elf_and_fake_the_config(VirtMachineParams *p, const char *path)
     return false;
 }
 
-RISCVMachine *virt_machine_main(int argc, char **argv) {
+size_t get_file_size(const std::string &filename) {
+  FILE* file = fopen(filename.c_str(), "rb"); // Open the file in binary mode
+  if (file == nullptr) {
+    perror("Error opening file");
+    return -1;
+  }
+
+  fseek(file, 0, SEEK_END); // Seek to the end of the file
+  size_t size = ftell(file); // Get the current file pointer position
+  fclose(file); // Close the file
+
+  return size;
+}
+
+RISCVMachine *virt_machine_main(int argc, char *argv[]) {
     const char *prog                     = argv[0];
-    char *      snapshot_load_name       = 0;
-    char *      snapshot_save_name       = 0;
+    char       *snapshot_load_name       = 0;
+    char       *snapshot_save_name       = 0;
     const char *path                     = NULL;
     const char *cmdline                  = NULL;
     long        ncpus                    = 0;
     uint64_t    maxinsns                 = 0;
+    uint64_t    skip_insns               = 0;
     uint64_t    trace                    = UINT64_MAX;
     long        memory_size_override     = 0;
     uint64_t    memory_addr_override     = 0;
     bool        ignore_sbi_shutdown      = false;
     bool        dump_memories            = false;
-    char *      bootrom_name             = 0;
-    char *      dtb_name                 = 0;
+    char       *bootrom_name             = 0;
+    char       *dtb_name                 = 0;
     bool        compact_bootrom          = false;
     uint64_t    reset_vector_override    = 0;
     uint64_t    plic_base_addr_override  = 0;
@@ -660,8 +679,11 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
             {"ncpus",                   required_argument, 0,  'n' }, // CFG
             {"load",                    required_argument, 0,  'l' },
             {"save",                    required_argument, 0,  's' },
+#ifdef SIMPOINT_BB
             {"simpoint",                required_argument, 0,  'S' },
+#endif
             {"maxinsns",                required_argument, 0,  'm' }, // CFG
+            {"skip_insns",              required_argument, 0,  'z' }, // CFG
             {"trace   ",                required_argument, 0,  't' },
             {"ignore_sbi_shutdown",     required_argument, 0,  'P' }, // CFG
             {"dump_memories",                 no_argument, 0,  'D' }, // CFG
@@ -675,6 +697,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
             {"clint",                   required_argument, 0,  'C' }, // CFG
             {"custom_extension",              no_argument, 0,  'u' }, // CFG
             {"clear_ids",                     no_argument, 0,  'L' }, // CFG
+            {"gdbinit",                     required_argument, 0,  'G' }, // CFG
             {"ctrlc",                         no_argument, 0,  'X' },
 #ifdef LIVECACHE
             {"live_cache_size",         required_argument, 0,  'w' }, // CFG
@@ -713,16 +736,18 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
                 snapshot_save_name = strdup(optarg);
                 break;
 
+#ifdef SIMPOINT_BB
             case 'S':
                 if (simpoint_file)
                     usage(prog, "already had a simpoint file");
                 simpoint_file = strdup(optarg);
                 break;
+#endif
 
             case 'm':
                 if (maxinsns)
                     usage(prog, "already had a max instructions");
-                maxinsns = (uint64_t)atoll(optarg);
+                maxinsns = (int64_t)atoll(optarg);
                 {
                     char last = optarg[strlen(optarg) - 1];
                     if (last == 'k' || last == 'K')
@@ -731,6 +756,21 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
                         maxinsns *= 1000000;
                     else if (last == 'g' || last == 'G')
                         maxinsns *= 1000000000;
+                }
+                break;
+
+            case 'z':
+                if (skip_insns)
+                    usage(prog, "already had a skip instructions");
+                skip_insns = (uint64_t)atoll(optarg);
+                {
+                    char last = optarg[strlen(optarg) - 1];
+                    if (last == 'k' || last == 'K')
+                        skip_insns *= 1000;
+                    else if (last == 'm' || last == 'M')
+                        skip_insns *= 1000000;
+                    else if (last == 'g' || last == 'G')
+                        skip_insns *= 1000000000;
                 }
                 break;
 
@@ -835,13 +875,14 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
                 }
                 break;
 #endif
+            case 'G': break;
 
             default: usage(prog, "I'm not having this argument");
         }
     }
 
-    if (optind >= argc)
-        usage(prog, "missing config file");
+    if (optind >= argc && snapshot_load_name==nullptr)
+        usage(prog, "missing config file or load checkpoint");
     else
         path = argv[optind++];
 
@@ -850,7 +891,6 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
             usage(prog, "too many arguments");
     */
 
-    assert(path);
     BlockDeviceModeEnum drive_mode = BF_MODE_SNAPSHOT;
     VirtMachineParams   p_s, *p = &p_s;
 
@@ -859,10 +899,16 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
     fs_wget_init();
 #endif
 
-    if (!load_elf_and_fake_the_config(p, path)) {
-        virt_machine_load_config_file(p, path, NULL, NULL);
-    } else {
-        elf_based = true;
+    if (snapshot_load_name == nullptr) {
+        assert(path);
+        if (!load_elf_and_fake_the_config(p, path)) {
+            virt_machine_load_config_file(p, path, NULL, NULL);
+        } else {
+            elf_based = true;
+        }
+    }else{
+        std::string ram_file(snapshot_load_name);
+        p->ram_size = get_file_size(ram_file + ".mainram"); 
     }
 
     if (p->logfile) {
@@ -897,7 +943,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
     /* open the files & devices */
     for (int i = 0; i < p->drive_count; i++) {
         BlockDevice *drive;
-        char *       fname;
+        char        *fname;
         fname = get_file_path(p->cfg_filename, p->tab_drive[i].filename);
 #ifdef CONFIG_FS_NET
         if (is_url(fname)) {
@@ -915,7 +961,7 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
     }
 
     for (int i = 0; i < p->fs_count; i++) {
-        FSDevice *  fs;
+        FSDevice   *fs;
         const char *path;
         path = p->tab_fs[i].filename;
 #ifdef CONFIG_FS_NET
@@ -995,6 +1041,11 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
     p->custom_extension = custom_extension;
     p->clear_ids        = clear_ids;
 
+    // Overwrite the value specified in the configuration file
+    if (snapshot_load_name) {
+        p->snapshot_load_name = snapshot_load_name;
+    }
+
     RISCVMachine *s = virt_machine_init(p);
     if (!s)
         return NULL;
@@ -1019,11 +1070,6 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
         s = virt_machine_load(p, s);
         if (!s)
             return NULL;
-    }
-
-    // Overwrite the value specified in the configuration file
-    if (snapshot_load_name) {
-        s->common.snapshot_load_name = snapshot_load_name;
     }
 
     if (simpoint_file) {
@@ -1070,10 +1116,14 @@ RISCVMachine *virt_machine_main(int argc, char **argv) {
         s->common.maxinsns = maxinsns;
     }
 
+    if (skip_insns > 0) {
+        s->common.skip_insns = skip_insns;
+    }
+
     // If not value is specified in the configuration or the command line
     // then run indefinitely
     if (s->common.maxinsns == 0)
-        s->common.maxinsns = UINT64_MAX;
+        s->common.maxinsns = INT64_MAX;
 
     for (int i = 0; i < s->ncpus; ++i) s->cpu_state[i]->ignore_sbi_shutdown = ignore_sbi_shutdown;
 

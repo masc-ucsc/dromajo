@@ -61,7 +61,7 @@ typedef struct RISCVMachineHooks {
 struct RISCVMachine {
     VirtMachine       common;
     RISCVMachineHooks hooks;
-    PhysMemoryMap *   mem_map;
+    PhysMemoryMap    *mem_map;
 #ifdef LIVECACHE
     LiveCache *llc;
 #endif

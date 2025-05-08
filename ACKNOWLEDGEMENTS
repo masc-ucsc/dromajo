@@ -1,0 +1,14 @@
+
+Fabrice Bellard
+ https://bellard.org/tinyemu is the starting point for dromajo
+
+Nursultan Kabylkas
+ Contributions on the Goldmem
+
+Futurewei
+ Contributions on the cache warmup
+ Contributions on the multicore checkpoint
+
+Muhammand Hadir Khan
+ gdb stub skeleton
+

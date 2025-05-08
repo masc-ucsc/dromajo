@@ -214,6 +214,10 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
 
     r->common.maxinsns--;
 
+    if (r->common.skip_insns > 0) {
+        r->common.skip_insns--;
+    }
+
     if (riscv_terminated(s)) {
         return 1;
     }
@@ -466,11 +470,11 @@ int dromajo_cosim_step(dromajo_cosim_state_t *state, int hartid, uint64_t dut_pc
  * DUT sets Dromajo memory. Used so that other devices (i.e. block device, accelerators, can write to memory).
  */
 int dromajo_cosim_override_mem(dromajo_cosim_state_t *state, int hartid, uint64_t dut_paddr, uint64_t dut_val, int size_log2) {
-    RISCVMachine * r = (RISCVMachine *)state;
+    RISCVMachine  *r = (RISCVMachine *)state;
     RISCVCPUState *s = r->cpu_state[hartid];
     VirtMachine    m = r->common;
 
-    uint8_t *        ptr;
+    uint8_t         *ptr;
     target_ulong     offset;
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, dut_paddr);
 

@@ -51,7 +51,7 @@
 
 static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr, uint64_t size, int devram_flags);
 static void             default_free_ram(PhysMemoryMap *s, PhysMemoryRange *pr);
-static const uint32_t * default_get_dirty_bits(PhysMemoryMap *map, PhysMemoryRange *pr);
+static const uint32_t  *default_get_dirty_bits(PhysMemoryMap *map, PhysMemoryRange *pr);
 static void             default_set_addr(PhysMemoryMap *map, PhysMemoryRange *pr, uint64_t addr, BOOL enabled);
 
 PhysMemoryMap *phys_mem_map_init(void) {

@@ -35,20 +35,75 @@
 
 #include <unordered_map>
 
-#include "LiveCacheCore.h"
-#include "cutils.h"
-#include "iomem.h"
-#include "riscv_machine.h"
-#include "virtio.h"
-
-//#define REGRESS_COSIM 1
+// #define REGRESS_COSIM 1
 #ifdef REGRESS_COSIM
 #include "dromajo_cosim.h"
 #endif
 
+// #define SIMPOINT_BB
+// #define BRANCHPROF
+#ifdef BRANCHPROF
+FILE *pc_trace;
+
+void print_branch_info(uint64_t last_pc, uint32_t insn_raw) {
+    static uint64_t last_last_pc;
+    static uint8_t  branch_flag = 0;
+    // for (int i = 0; i < m->ncpus; ++i)
+    {
+        if (branch_flag) {
+            if (last_pc - last_last_pc == 4)
+                fprintf(pc_trace, "%32s\n", "Not Taken Branch");
+            else
+                fprintf(pc_trace, "%32s\n", "Taken Branch");
+            branch_flag = 0;
+        }
+
+        fprintf(pc_trace, "%20lx\t|%20x\t", last_pc, insn_raw);
+        if (insn_raw < 0x100) {
+            fprintf(pc_trace, "\t|");
+        } else {
+            fprintf(pc_trace, "|");
+        }
+
+        if (((insn_raw & 0x7fff) == 0x73)) {
+            if ((((insn_raw & 0xffffff80) == 0x0)))  // ECall
+            {
+                fprintf(pc_trace, "%32s\n", "ECALL type");
+            } else if ((insn_raw == 0x100073) || (insn_raw == 0x200073) || (insn_raw == 0x30200073)
+                       || (insn_raw == 0x7b200073))  // EReturn
+            {
+                fprintf(pc_trace, "%32s\n", "ERET type");
+            }
+        }
+
+        else if (((insn_raw & 0x70) == 0x60)) {
+            if (((insn_raw & 0xf) == 0x3)) {
+                branch_flag = 1;
+            } else  // Jump
+            {
+                if ((insn_raw & 0xf) == 0x7) {
+                    if (((insn_raw & 0xf80) >> 7) == 0x0) {
+                        fprintf(pc_trace, "%32s\n", "Return");
+                    } else {
+                        fprintf(pc_trace, "%32s\n", "Reg based Fxn Call");
+                    }
+                } else {
+                    fprintf(pc_trace, "%32s\n", "PC relative Fxn Call");
+                }
+            }
+        } else  // Non CTI
+        {
+            fprintf(pc_trace, "%32s\n", "Non - CTI");
+        }
+
+        // fprintf (pc_trace, "\n");
+        last_last_pc = last_pc;
+    }
+}
+#endif
+
 #ifdef SIMPOINT_BB
 FILE *simpoint_bb_file = nullptr;
-int   simpoint_roi     = 0;  // start without ROI enabled
 
 int simpoint_step(RISCVMachine *m, int hartid) {
     assert(hartid == 0);  // Only single core for simpoint creation
@@ -124,6 +179,13 @@ int simpoint_step(RISCVMachine *m, int hartid) {
 static int iterate_core(RISCVMachine *m, int hartid, int n_cycles) {
     m->common.maxinsns -= n_cycles;
 
+    if ((m->common.skip_insns - n_cycles) > 0) {
+        m->common.skip_insns -= n_cycles;
+    } else  // Check if this is the correct behavior for n_cycles > 1, or some handling is required
+    {
+        m->common.skip_insns = 0;
+    }
+
     if (m->common.maxinsns <= 0)
         /* Succeed after N instructions without failure. */
         return 0;
@@ -137,8 +199,33 @@ static int iterate_core(RISCVMachine *m, int hartid, int n_cycles) {
     int      priv     = riscv_get_priv_level(cpu);
     uint32_t insn_raw = -1;
     bool     do_trace = false;
-
     (void)riscv_read_insn(cpu, &insn_raw, last_pc);
+#if 0
+    static int      counter    = 0;
+    static uint64_t x_last_pc  = 0;
+    static uint32_t x_insn_raw = 0;
+    if ((insn_raw + 1) == 0 || insn_raw == 0) {
+        if (x_last_pc != last_pc || counter > 1024) {
+            fprintf(stderr, "counter=%d last_pc = %lx, insn_raw = %x\n", counter, x_last_pc, x_insn_raw);
+            x_last_pc  = last_pc;
+            x_insn_raw = insn_raw;
+            counter    = 0;
+        }
+        counter++;
+    } else {
+        if (counter) {
+            fprintf(stderr, "counter=%d last_pc = %lx, insn_raw = %x \n", counter, x_last_pc, x_insn_raw);
+        }
+        counter = 0;
+    }
+#endif
+
+#ifdef BRANCHPROF
+    for (int i = 0; i < m->ncpus; ++i) {
+        print_branch_info(last_pc, insn_raw);
+    }
+#endif  // BRANCHPROF
+
     if (m->common.trace < (unsigned)n_cycles) {
         n_cycles = 1;
         do_trace = true;
@@ -196,6 +283,31 @@ static void sigintr_handler(int dummy) {
 }
 
 int main(int argc, char **argv) {
+    int port_num = 0;
+#if 0
+    const char *port_name = NULL;
+    for (;;) {
+        // clang-format off
+        static struct option long_options[] = {
+            {"gdbinit",                     required_argument, 0,  'G' } // CFG
+            ,{ 0,         0,                 0,           0 }
+        };
+        // clang-format on
+
+        int c = getopt_long(argc, argv, "", long_options, 0);
+        if (c == -1) {
+            break;
+        }
+        switch (c) {
+            case 'G':
+                port_name = strdup(optarg);
+                port_num  = atoi(port_name);
+                break;
+            default: break;
+        }
+    };
+#endif
+
 #ifdef REGRESS_COSIM
     dromajo_cosim_state_t *costate = 0;
     costate                        = dromajo_cosim_init(argc, argv);
@@ -207,7 +319,13 @@ int main(int argc, char **argv) {
         ;
     dromajo_cosim_fini(costate);
 #else
+
     RISCVMachine *m = virt_machine_main(argc, argv);
+    if (!m)
+        return 1;
+
+    if (port_num)
+        gdb_stub(m, port_num);
 
 #ifdef SIMPOINT_BB
     if (m->common.simpoints.empty()) {
@@ -219,10 +337,19 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    if (!m)
-        return 1;
+#ifdef BRANCHPROF
+    pc_trace = fopen("pc_trace.txt", "w+");
+    if (pc_trace == nullptr) {
+        fprintf(dromajo_stderr, "\nerror: could not open pc_trace.txt for dumping trace\n");
+        exit(-3);
+    } else {
+        fprintf(dromajo_stderr, "\nOpened dromajo_simpoint.bb for dumping trace\n");
+        fprintf(pc_trace, "%20s\t\t|%20s\t|%32s\n", "PC", "Instruction", "Instructiontype");
+    }
 
-    int n_cycles                = 10000;
+#endif
+
+    int n_cycles                = 1;
     execution_start_ts          = get_current_time_in_seconds();
     execution_progress_meassure = &m->cpu_state[0]->minstret;
     signal(SIGINT, sigintr_handler);
@@ -232,11 +359,18 @@ int main(int argc, char **argv) {
         keep_going = 0;
         for (int i = 0; i < m->ncpus; ++i) keep_going |= iterate_core(m, i, n_cycles);
 #ifdef SIMPOINT_BB
-        if (simpoint_roi) {
+        if (roi_region) {
             if (!simpoint_step(m, 0))
                 break;
         }
 #endif
+        /*#ifdef BRANCHPROF
+                for (int i = 0; i < m->ncpus; ++i)
+                {
+                        uint64_t pc            = virt_machine_get_pc(m, i);
+                        fprintf (pc_trace, "pc = %"PRIu64"\n", pc);
+                }
+        #endif*/
     } while (keep_going);
 
     double t = get_current_time_in_seconds();
@@ -256,6 +390,10 @@ int main(int argc, char **argv) {
     fprintf(dromajo_stderr, "\nPower off.\n");
 
     virt_machine_end(m);
+#ifdef BRANCHPROF
+    fclose(pc_trace);
+#endif
+
 #endif
 
 #ifdef LIVECACHE

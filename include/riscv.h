@@ -27,19 +27,19 @@
 
 #define MIP_USIP (1 << 0)
 #define MIP_SSIP (1 << 1)
-//#define MIP_HSIP (1 << 2)  Removed in Priv 1.11 (draft)
+// #define MIP_HSIP (1 << 2)  Removed in Priv 1.11 (draft)
 #define MIP_MSIP (1 << 3)
 #define MIP_UTIP (1 << 4)
 #define MIP_STIP (1 << 5)
-//#define MIP_HTIP (1 << 6)  Removed in Priv 1.11 (draft)
+// #define MIP_HTIP (1 << 6)  Removed in Priv 1.11 (draft)
 #define MIP_MTIP (1 << 7)
 #define MIP_UEIP (1 << 8)
 #define MIP_SEIP (1 << 9)
-//#define MIP_HEIP (1 << 10)  Removed in Priv 1.11 (draft)
+// #define MIP_HEIP (1 << 10)  Removed in Priv 1.11 (draft)
 #define MIP_MEIP (1 << 11)
 // ET-specific, non-standard counter overflow interrupts.
-//#define MIP_UCIP (1 << 16) probably not necessary.
-//#define MIP_SCIP (1 << 17) probably not necessary.
+// #define MIP_UCIP (1 << 16) probably not necessary.
+// #define MIP_SCIP (1 << 17) probably not necessary.
 #define MIP_MCIP (1 << 18)
 
 #define MIE_USIE MIP_USIP

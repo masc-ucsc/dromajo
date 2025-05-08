@@ -113,7 +113,7 @@ static JSONProperty *json_object_get2(JSONObject *obj, const char *name) {
 
 JSONValue json_object_get(JSONValue val, const char *name) {
     JSONProperty *f;
-    JSONObject *  obj;
+    JSONObject   *obj;
 
     if (val.type != JSON_OBJ)
         return json_undefined_new();
@@ -125,7 +125,7 @@ JSONValue json_object_get(JSONValue val, const char *name) {
 }
 
 int json_object_set(JSONValue val, const char *name, JSONValue prop_val) {
-    JSONObject *  obj;
+    JSONObject   *obj;
     JSONProperty *f;
     int           new_size;
 
@@ -266,7 +266,7 @@ void json_free(JSONValue val) {
             free(array);
         } break;
         case JSON_OBJ: {
-            JSONObject *  obj = val.u.obj;
+            JSONObject   *obj = val.u.obj;
             JSONProperty *f;
             int           i;
 
@@ -305,7 +305,7 @@ static void skip_spaces(const char **pp) {
 static inline BOOL is_ident_first(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$'; }
 
 static int parse_ident(char *buf, int buf_size, const char **pp) {
-    char *      q;
+    char       *q;
     const char *p;
     p    = *pp;
     q    = buf;

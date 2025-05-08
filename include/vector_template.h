@@ -99,7 +99,7 @@ typedef void (*Vector_Integer_Op)(RISCVCPUState *, uint8_t *, uint8_t *, void *)
 /* v_reg_read */
 #define V_REG_READ(WIDTH)                                                                 \
     static target_ulong v_reg_read_e##WIDTH(RISCVCPUState *s, uint8_t reg, uint8_t elm) { \
-        uint8_t *        ptr = &s->v_reg[reg][elm * (WIDTH >> 3)];                        \
+        uint8_t         *ptr = &s->v_reg[reg][elm * (WIDTH >> 3)];                        \
         uint##WIDTH##_t *val = (uint##WIDTH##_t *)ptr;                                    \
         return *val;                                                                      \
     }
@@ -136,8 +136,8 @@ V_OP_CONFIG(v_add, V_ADD)
 /* vw_addu */
 #define VW_ADDU(WIDTH, WIDTH2)                                                                 \
     static void vw_addu_e##WIDTH(RISCVCPUState *s, uint8_t *vd, uint8_t *vs2, void *val_ptr) { \
-        uint##WIDTH##_t * val   = (uint##WIDTH##_t *)val_ptr;                                  \
-        uint##WIDTH##_t * vs2_e = (uint##WIDTH##_t *)vs2;                                      \
+        uint##WIDTH##_t  *val   = (uint##WIDTH##_t *)val_ptr;                                  \
+        uint##WIDTH##_t  *vs2_e = (uint##WIDTH##_t *)vs2;                                      \
         uint##WIDTH2##_t *vd_e  = (uint##WIDTH2##_t *)vd;                                      \
         *vd_e                   = *vs2_e + *val;                                               \
     }
@@ -146,7 +146,7 @@ V_WIDEN_OP_CONFIG(vw_addu, VW_ADDU)
 /* vw_addu.w */
 #define VW_ADDUW(WIDTH, WIDTH2)                                                                 \
     static void vw_adduw_e##WIDTH(RISCVCPUState *s, uint8_t *vd, uint8_t *vs2, void *val_ptr) { \
-        uint##WIDTH##_t * val   = (uint##WIDTH##_t *)val_ptr;                                   \
+        uint##WIDTH##_t  *val   = (uint##WIDTH##_t *)val_ptr;                                   \
         uint##WIDTH2##_t *vs2_e = (uint##WIDTH2##_t *)vs2;                                      \
         uint##WIDTH2##_t *vd_e  = (uint##WIDTH2##_t *)vd;                                       \
         *vd_e                   = *vs2_e + *val;                                                \
@@ -156,8 +156,8 @@ V_WIDEN_OP_CONFIG(vw_adduw, VW_ADDUW)
 /* vw_add */
 #define VW_ADD(WIDTH, WIDTH2)                                                                 \
     static void vw_add_e##WIDTH(RISCVCPUState *s, uint8_t *vd, uint8_t *vs2, void *val_ptr) { \
-        int##WIDTH##_t * val   = (int##WIDTH##_t *)val_ptr;                                   \
-        int##WIDTH##_t * vs2_e = (int##WIDTH##_t *)vs2;                                       \
+        int##WIDTH##_t  *val   = (int##WIDTH##_t *)val_ptr;                                   \
+        int##WIDTH##_t  *vs2_e = (int##WIDTH##_t *)vs2;                                       \
         int##WIDTH2##_t *vd_e  = (int##WIDTH2##_t *)vd;                                       \
         *vd_e                  = *vs2_e + *val;                                               \
     }
@@ -166,7 +166,7 @@ V_WIDEN_OP_CONFIG(vw_add, VW_ADD)
 /* vw_add.w */
 #define VW_ADDW(WIDTH, WIDTH2)                                                                 \
     static void vw_addw_e##WIDTH(RISCVCPUState *s, uint8_t *vd, uint8_t *vs2, void *val_ptr) { \
-        int##WIDTH##_t * val   = (int##WIDTH##_t *)val_ptr;                                    \
+        int##WIDTH##_t  *val   = (int##WIDTH##_t *)val_ptr;                                    \
         int##WIDTH2##_t *vs2_e = (int##WIDTH2##_t *)vs2;                                       \
         int##WIDTH2##_t *vd_e  = (int##WIDTH2##_t *)vd;                                        \
         *vd_e                  = *vs2_e + *val;                                                \

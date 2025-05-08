@@ -1,0 +1,36 @@
+
+
+benchmarks=("gcc" "astar" "bzip2" "gobmk" "h264ref" "hmmer" "libquantum" "omnetpp" "perlbench" "sjeng" "xalanc")
+
+#benchmarks=("libquantum" "omnetpp" "perlbench" "sjeng" "xalanc")
+
+old_benchmark="xalanc"
+
+for benchmark in ${benchmarks[@]}; do
+  echo "********************************************** $benchmark ********************************************"
+  sed -i "s/$old_benchmark/$benchmark/g" boot.cfg
+  
+  #make -j16 -C buildroot
+  #cp buildroot/output/images/rootfs.cpio .
+  
+  ../build/dromajo boot.cfg
+
+  echo "`wc -l dromajo_simpoint.bb`"
+  echo "******************* Generating simpoints and weights ***********************"
+  ./simpoint/bin/simpoint -maxK 30 -saveSimpoints simpoints -saveSimpointWeights weights -loadFVFile dromajo_simpoint.bb
+  
+  echo "******************* Generating sp files ***********************"
+  ../build/dromajo --simpoint=simpoints boot.cfg
+  
+  #../build/dromajo --save sp01 --maxinsn 1000000 ./boot.cfg
+  
+  echo "******************* Moving files ***********************"
+  mkdir -p simpoint_data/spec06_$benchmark
+  mv weights simpoint_data/spec06_$benchmark/
+  mv simpoints simpoint_data/spec06_$benchmark/
+  mv sp* simpoint_data/spec06_$benchmark/
+  mv dromajo_simpoint.bb simpoint_data/spec06_$benchmark/
+  		
+  old_benchmark=$benchmark
+  echo "******************* old_benchmark = $old_benchmark ***********************"
+done

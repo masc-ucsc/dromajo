@@ -52,6 +52,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <sstream>
+
 #include "cutils.h"
 #include "dromajo.h"
 #include "dw_apb_uart.h"
@@ -60,13 +62,13 @@
 
 /* RISCV machine */
 
-//#define DUMP_UART
-//#define DUMP_CLINT
-//#define DUMP_HTIF
-//#define DUMP_PLIC
-//#define DUMP_DTB
+// #define DUMP_UART
+// #define DUMP_CLINT
+// #define DUMP_HTIF
+// #define DUMP_PLIC
+// #define DUMP_DTB
 
-//#define USE_SIFIVE_UART
+// #define USE_SIFIVE_UART
 
 enum {
     SIFIVE_UART_TXFIFO = 0,
@@ -257,10 +259,17 @@ static void clint_write(void *opaque, uint32_t offset, uint32_t val, int size_lo
         int hartid = offset >> 2;
         if (m->ncpus <= hartid) {
             vm_error("%s: MSIP access for hartid:%d which is beyond ncpus\n", __func__, hartid);
-        } else if (val & 1)
+        } else if (val & 1) {
             riscv_cpu_set_mip(m->cpu_state[hartid], MIP_MSIP);
-        else
+#ifdef DUMP_CLINT
+            vm_error("clint_write: cpu_set_mip offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
+        } else {
             riscv_cpu_reset_mip(m->cpu_state[hartid], MIP_MSIP);
+#ifdef DUMP_CLINT
+            vm_error("clint_write: cpu_reset_mip offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
+        }
     } else if (offset == 0xbff8) {
         uint64_t mtime          = m->cpu_state[0]->mcycle / RTC_FREQ_DIV;  // WARNING: move mcycle to RISCVMachine
         mtime                   = (mtime & 0xFFFFFFFF00000000L) + val;
@@ -280,6 +289,9 @@ static void clint_write(void *opaque, uint32_t offset, uint32_t val, int size_lo
             m->cpu_state[hartid]->timecmp = (m->cpu_state[hartid]->timecmp & ~0xffffffff) | val;
             riscv_cpu_reset_mip(m->cpu_state[hartid], MIP_MTIP);
         }
+#ifdef DUMP_CLINT
+        vm_error("clint_write: cpu_reset_mip timecmp offset=%x val=%x hartid=%d\n", offset, val, hartid);
+#endif
     } else {
         vm_error("clint_write to unmanaged address CLINT_BASE+0x%x\n", offset);
         val = 0;
@@ -594,7 +606,7 @@ static void fdt_prop_tab_str(FDTState *s, const char *prop_name, ...) {
 
 /* write the FDT to 'dst1'. return the FDT size in bytes */
 int fdt_output(FDTState *s, uint8_t *dst) {
-    struct fdt_header *       h;
+    struct fdt_header        *h;
     struct fdt_reserve_entry *re;
     int                       dt_struct_size;
     int                       dt_strings_size;
@@ -650,6 +662,38 @@ void fdt_end(FDTState *s) {
     free(s);
 }
 
+static int misa_extension_imp(char ext, unsigned long misa) {
+
+  if ('A' <= ext && ext <= 'Z')
+    return misa & (1 << (ext - 'A'));
+  if ('a' <= ext && ext <= 'z')
+    return misa & (1 << (ext - 'a'));
+
+  return 0;
+}
+
+static void misa_string(char *out, unsigned int out_sz, unsigned long misa) {
+	unsigned int i, pos = 0;
+	const char valid_isa_order[] = "iemafdqclbjtpvnhkorwxyzg";
+
+	assert(out);
+
+  if (5 <= (out_sz - pos)) {
+    out[pos++] = 'r';
+    out[pos++] = 'v';
+    out[pos++] = '6';
+    out[pos++] = '4';
+  }
+
+	for (i = 0; i < sizeof(valid_isa_order) && (pos < out_sz); i++) {
+		if (misa_extension_imp(valid_isa_order[i], misa))
+			out[pos++] = valid_isa_order[i];
+	}
+
+	if (pos < out_sz)
+		out[pos++] = '\0';
+}
+
 static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, const char *cmd_line, uint64_t initrd_start,
                            uint64_t initrd_end) {
     FDTState *s = 0;
@@ -657,7 +701,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
     if (!dtb_name) {
         int       intc_phandle = 0;
         int       max_xlen, i, cur_phandle;
-        char      isa_string[128], *q;
+        char      isa_string[128];
         uint32_t  misa;
         uint32_t  tab[4 * MAX_CPUS];
         FBDevice *fb_dev;
@@ -690,13 +734,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 
             max_xlen = 64;
             misa     = riscv_cpu_get_misa(m->cpu_state[hartid]);
-            q        = isa_string;
-            q += snprintf(isa_string, sizeof(isa_string), "rv%d", max_xlen);
-            for (i = 0; i < 26; ++i) {
-                if (misa & (1 << i))
-                    *q++ = 'a' + i;
-            }
-            *q = '\0';
+            misa_string(isa_string, sizeof(isa_string), misa);
             fdt_prop_str(s, "riscv,isa", isa_string);
 
             fdt_prop_str(s, "mmu-type", max_xlen <= 32 ? "riscv,sv32" : "riscv,sv48");
@@ -871,7 +909,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst, const char *dtb_name, 
 }
 
 void load_elf_image(RISCVMachine *s, const uint8_t *image, size_t image_len) {
-    Elf64_Ehdr *      ehdr = (Elf64_Ehdr *)image;
+    Elf64_Ehdr       *ehdr = (Elf64_Ehdr *)image;
     const Elf64_Phdr *ph   = (Elf64_Phdr *)(image + ehdr->e_phoff);
 
     for (int i = 0; i < ehdr->e_phnum; ++i, ++ph)
@@ -920,9 +958,9 @@ void load_hex_image(RISCVMachine *s, uint8_t *image, size_t image_len) {
 }
 
 static int load_bootrom(RISCVMachine *s, const char *bootrom_name) {
-    uint8_t * ram_ptr  = get_ram_ptr(s, ROM_BASE_ADDR);
+    uint8_t  *ram_ptr  = get_ram_ptr(s, ROM_BASE_ADDR);
     uint32_t *location = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
-    FILE *    f        = fopen(bootrom_name, "rb");
+    FILE     *f        = fopen(bootrom_name, "rb");
 
     if (!f) {
         vm_error("dromajo: %s: %s\n", bootrom_name, strerror(errno));
@@ -937,9 +975,8 @@ static int load_bootrom(RISCVMachine *s, const char *bootrom_name) {
 }
 
 static int generate_bootrom(RISCVMachine *s) {
-    uint8_t * ram_ptr        = get_ram_ptr(s, ROM_BASE_ADDR);
-    uint32_t *q              = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
-    int32_t   bootromSzBytes = 0;
+    uint8_t  *ram_ptr = get_ram_ptr(s, ROM_BASE_ADDR);
+    uint32_t *q       = (uint32_t *)(ram_ptr + (BOOT_BASE_ADDR - ROM_BASE_ADDR));
 
     /*
      * RISCVEMU upon which Dromajo is based used to generate the boot
@@ -970,7 +1007,7 @@ static int generate_bootrom(RISCVMachine *s) {
         *q++ = 0x00000013;  // nop
     }
     *q++ = 0x00000597;  // 1:      auipc  a1, 0x0
-    *q++ = 0x0f058593;  //         addi   a1, a1, 240 # _start + 256
+    *q++ = 0x0f058593;  //         addi   a1, a1, 240 # _start + 256 Pointer to FDT
     *q++ = 0x60300413;  //         li     s0, 1539
     *q++ = 0x7b041073;  //         csrw   dcsr, s0
     if (s->ram_base_addr == 0xC000000000) {
@@ -983,11 +1020,10 @@ static int generate_bootrom(RISCVMachine *s) {
         else
             *q++ = 0x02741413;  //         slli   s0, s0, 39
     }
-    *q++           = 0x7b141073;  //         csrw   dpc, s0
-    *q++           = 0x7b200073;  //         dret
-    bootromSzBytes = 13 * sizeof(uint32_t);
+    *q++ = 0x7b141073;  //         csrw   dpc, s0
+    *q++ = 0x7b200073;  //         dret
 
-    return bootromSzBytes;
+    return (uint8_t *)q - ram_ptr;
 }
 
 /* Return non-zero on failure */
@@ -1063,12 +1099,11 @@ static int copy_kernel(RISCVMachine *s, uint8_t *fw_buf, size_t fw_buf_len, cons
                 fdt_off += 256;
 
             uint8_t *ram_ptr = get_ram_ptr(s, ROM_BASE_ADDR);
+            // WARNING: ROM_SIZE has 4K per core, the first 4K are for FDT
             if (riscv_build_fdt(s, ram_ptr + fdt_off, dtb_name, cmd_line, s->initrd_start, initrd_end) < 0)
                 return -1;
         }
     }
-
-    for (int i = 0; i < s->ncpus; ++i) riscv_set_debug_mode(s->cpu_state[i], TRUE);
 
     return 0;
 }
@@ -1159,6 +1194,7 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
     s->mem_map->opaque                = s;
     s->mem_map->flush_tlb_write_range = riscv_flush_tlb_write_range;
     s->common.maxinsns                = p->maxinsns;
+    s->common.skip_insns              = p->skip_insns;
     s->common.snapshot_load_name      = p->snapshot_load_name;
 
     /* loggers are changed using install_new_loggers() in dromajo_cosim */
@@ -1196,6 +1232,8 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
 
     /* RAM */
     cpu_register_ram(s->mem_map, s->ram_base_addr, s->ram_size, 0);
+
+    /* Boot ROM. */
     cpu_register_ram(s->mem_map, ROM_BASE_ADDR, ROM_SIZE, 0);
 
     for (int i = 0; i < s->ncpus; ++i) {
@@ -1308,23 +1346,31 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
         }
     }
 
-    if (!p->files[VM_FILE_BIOS].buf) {
-        vm_error("No bios given\n");
-        return NULL;
-    } else if (copy_kernel(s,
-                           p->files[VM_FILE_BIOS].buf,
-                           p->files[VM_FILE_BIOS].len,
-                           p->files[VM_FILE_KERNEL].buf,
-                           p->files[VM_FILE_KERNEL].len,
-                           p->files[VM_FILE_INITRD].buf,
-                           p->files[VM_FILE_INITRD].len,
-                           p->bootrom_name,
-                           p->dtb_name,
-                           p->cmdline))
-        return NULL;
+    if (s->common.snapshot_load_name==nullptr) {
+      if (!p->files[VM_FILE_BIOS].buf) {
+          vm_error("No bios given\n");
+          return NULL;
+      } else if (copy_kernel(s,
+                            p->files[VM_FILE_BIOS].buf,
+                            p->files[VM_FILE_BIOS].len,
+                            p->files[VM_FILE_KERNEL].buf,
+                            p->files[VM_FILE_KERNEL].len,
+                            p->files[VM_FILE_INITRD].buf,
+                            p->files[VM_FILE_INITRD].len,
+                            p->bootrom_name,
+                            p->dtb_name,
+                            p->cmdline))
+          return NULL;
+    }
+
+    for (int i = 0; i < s->ncpus; ++i) riscv_set_debug_mode(s->cpu_state[i], TRUE);
 
     /* interrupts and exception setup for cosim */
     s->common.cosim             = false;
+    s->common.pending_exception = -1;
+    s->common.pending_interrupt = -1;
+
+    /* interrupts and exception setup for cosim */
     s->common.pending_exception = -1;
     s->common.pending_interrupt = -1;
 
@@ -1338,6 +1384,9 @@ RISCVMachine *virt_machine_init(const VirtMachineParams *p) {
 }
 
 RISCVMachine *virt_machine_load(const VirtMachineParams *p, RISCVMachine *s) {
+    if (s->common.snapshot_load_name)
+        return s; // no need if loading a checkpoint
+
     if (!p->files[VM_FILE_BIOS].buf) {
         vm_error("No bios given\n");
         return NULL;
@@ -1409,139 +1458,105 @@ void virt_machine_end(RISCVMachine *s) {
     free(s);
 }
 
-static inline void serialize_plic(RISCVMachine *m, JSONValue devs_json) {
-    JSONValue plic_device, a, j;
-    plic_device = json_object_new();
-    // PLIC priority
-    a = json_array_new();
-    for (int irq = 0; irq < PLIC_NUM_SOURCES + 1; ++irq) {
-        j           = json_int64_new(m->plic_priority[irq]);
-        JSONValue o = json_object_new();
-        json_object_set(o, "irq", j);
-        json_array_set(a, irq, o);
-    }
-    json_object_set(plic_device, "plic_priority", a);
-    // PLIC pending
-    j = json_int64_new(m->plic_pending_irq);
-    json_object_set(plic_device, "plic_pending_irq", j);
-    // PLIC served
-    j = json_int64_new(m->plic_served_irq);
-    json_object_set(plic_device, "plic_served_irq", j);
-    // PLIC enable (NOTE: should probably be handled by the CPU)
-    a = json_array_new();
-    for (int ctx = 0; ctx < 2; ++ctx) {
-        j           = json_int64_new(m->cpu_state[0]->plic_enable_irq[ctx]);  // FIXME: update for multicore
-        JSONValue o = json_object_new();
-        json_object_set(o, "ctx", j);
-        json_array_set(a, ctx, o);
-    }
-    json_object_set(plic_device, "plic_enable_irq", a);
-    json_object_set(devs_json, "plic", plic_device);
-}
-
-static inline void serialize_devices(RISCVMachine *m, const char *dump_base) {
-    JSONValue devs_json = json_object_new();
-    serialize_plic(m, devs_json);
-    for (int i = 0; i < m->virtio_count; ++i) {
-        JSONValue vio_device = json_object_new();
-        virtio_device_serialize(m->virtio_devices[i], vio_device);
-        char dev_name[5];
-        snprintf(dev_name, 5, "vio%d", i);
-        json_object_set(devs_json, dev_name, vio_device);
-    }
-
-    size_t len       = strlen(dump_base) + 5;
-    char * dump_name = (char *)alloca(len);
-    snprintf(dump_name, len, "%s.dev", dump_base);
-    FILE *fd = fopen(dump_name, "w");
-    if (!fd) {
-        err(-3, "opening %s for serialization", dump_name);
-    }
-    json_write(devs_json, fd, 0);
-    fclose(fd);
-    json_free(devs_json);
-}
-
 void virt_machine_serialize(RISCVMachine *m, const char *dump_name) {
-    RISCVCPUState *s = m->cpu_state[0];  // FIXME: MULTICORE
+    /* Check that all cores are out of the ROM. */
+    bool is_serializable = true;
+    for (int i = 0; i < m->ncpus && is_serializable; ++i) {
+        RISCVCPUState *s = m->cpu_state[i];
+        is_serializable  = s->priv != 3 || ((ROM_BASE_ADDR + ROM_SIZE) < s->pc);
+    }
 
-    vm_error("plic: %x %x timecmp=%llx\n", m->plic_pending_irq, m->plic_served_irq, (unsigned long long)s->timecmp);
+    /* Serialize core states. */
+    if (is_serializable) {
+        /* Create serialization file per core. */
+        for (int i = 0; i < m->ncpus; ++i) {
+            RISCVCPUState *s = m->cpu_state[i];
 
-    assert(m->ncpus == 1);  // FIXME: riscv_cpu_serialize must be patched for multicore
-    riscv_cpu_serialize(s, dump_name, m->clint_base_addr);
-    serialize_devices(m, dump_name);
-}
+            vm_error("plic: %x %x timecmp=%llx\n", m->plic_pending_irq, m->plic_served_irq, (unsigned long long)s->timecmp);
 
-static inline void deserialize_plic(RISCVMachine *m, JSONValue plic_device) {
-    // PLIC priority
-    JSONValue val = json_object_get(plic_device, "plic_priority");
-    for (int irq = 0; irq < PLIC_NUM_SOURCES + 1; ++irq) {
-        JSONValue a           = json_array_get(val, irq);
-        JSONValue j           = json_object_get(a, "irq");
-        m->plic_priority[irq] = (uint32_t)json_get_int64(j);
-    }
-    // PLIC pending
-    val                 = json_object_get(plic_device, "plic_pending_irq");
-    m->plic_pending_irq = (uint32_t)json_get_int64(val);
-    // PLIC served
-    val                = json_object_get(plic_device, "plic_served_irq");
-    m->plic_served_irq = (uint32_t)json_get_int64(val);
-    // PLIC enable (NOTE: should probably be handled by the CPU)
-    val = json_object_get(plic_device, "plic_enable_irq");
-    for (int ctx = 0; ctx < 2; ++ctx) {
-        JSONValue a                           = json_array_get(val, ctx);
-        JSONValue j                           = json_object_get(a, "ctx");
-        m->cpu_state[0]->plic_enable_irq[ctx] = (uint32_t)json_get_int64(j);  // FIXME: update for multicore
-    }
-}
+            /* Append core number suffix to the file name. */
+            std::stringstream core_dump_name;
+            core_dump_name << dump_name << i;
 
-static inline void deserialize_devices(RISCVMachine *m, const char *dump_base) {
-    // Form the required filename
-    size_t len       = strlen(dump_base) + 5;
-    char * dump_name = (char *)alloca(len);
+            riscv_cpu_serialize(s, core_dump_name.str().c_str(), m->clint_base_addr);
+        }
 
-    // Open the dump file
-    snprintf(dump_name, len, "%s.dev", dump_base);
-    FILE *fd = fopen(dump_name, "r");
-    if (!fd) {
-        err(-3, "opening %s for deserialization", dump_name);
+        /* Generate single boot ROM for all cores. */
+        const uint32_t kTotalRomSize = ROM_SIZE / 4;  // 4 due to uint32_t type
+        uint32_t       rom[kTotalRomSize];
+        {
+            uint8_t *ram_ptr = get_ram_ptr(m, ROM_BASE_ADDR);
+            memcpy(rom, ram_ptr, sizeof(rom));  // Keep current ROM + patches created after (needed for FDT)
+        }
+
+        // ROM organization
+        // 0..4KB
+        // 0000..003F wasted
+        // 0040..0AFF all cores boot area
+        //
+        // Core 0:
+        // 1000..0AFF boot code (2,752 B)
+        // 1B00..0FFF boot data (  512 B)
+        // Core 1:
+        // 2000..0AFF boot code (2,752 B)
+        // 2B00..0FFF boot data (  512 B)
+        // repeats for each core ...
+
+        {
+            uint32_t code_pos = (BOOT_BASE_ADDR - ROM_BASE_ADDR) / sizeof(*rom);
+
+            /* All cores start by determining the PC they should jump to. */
+            rom[code_pos++] = 0xf1402573;  // csrr   a0, mhartid
+            rom[code_pos++] = 0x00150513;  // addi  a0, a0, 1
+            rom[code_pos++] = 0x00c5151b;  // slliw  a0, a0, 12
+
+            /* These four instructions must be the last in preamble. */
+            /* If other instructions should be added, add them before these four. */
+            rom[code_pos++] = 0x00000597;  // auipc  a1, 0x0
+                                           // Clear the lower 12 bits to start in page align (boot rom has 1 page per core)
+            rom[code_pos++] = 0x40b5d593;  // srai a1, a1, 11
+            rom[code_pos++] = 0x00b59593;  // slli a1, a1, 11
+
+            rom[code_pos++] = 0x00b5053b;  // addw a0, a0, a1
+            rom[code_pos++] = 0x50067;     // jr a0
+            for (int i = 0; i < m->ncpus; ++i) {
+                code_pos = ((i + 1) << 12) / sizeof(*rom);
+
+                uint32_t data_pos = (((i + 1) << 12) | ROM_CODE_SIZE) / sizeof(*rom);
+                assert(code_pos < kTotalRomSize);    // Too many cores for the value of ROM_SIZE
+                assert(data_pos < kTotalRomSize);    // Too many cores for the value of ROM_SIZE
+                assert(data_pos < static_cast<uint32_t>((i + 2) << 12));  // Data pos can not overlap with next core region
+
+                const uint32_t max_per_core_pos = ((i + 2) << 12) / 4;  // 4 due to uint32_t type
+                RISCVCPUState *s                = m->cpu_state[i];
+                generate_core_boot_rom(rom, max_per_core_pos, code_pos, data_pos, s, m->clint_base_addr);
+            }
+            assert(ROM_SIZE > (1 << 12) * (m->ncpus + 1));  // +1 for the FDT region
+        }
+
+        /* Write generated boot ROM to file. */
+        uint32_t name_len = strlen(dump_name) + 64;
+        char    *f_name   = (char *)alloca(name_len);
+        snprintf(f_name, name_len, "%s.bootram", dump_name);
+        create_boot_rom_image(rom, 4 * kTotalRomSize, f_name);
+
+        /* Write memory state. */
+        riscv_ram_serialize(m->cpu_state[0], dump_name);
+    } else {
+        fprintf(dromajo_stderr, "ERROR: could not checkpoint. One or more cores running inside the ROM.\n");
+        exit(-4);
     }
-    fseek(fd, 0, SEEK_END);
-    size_t size = ftell(fd);
-    fseek(fd, 0, SEEK_SET);
-    char *buf = (char *)malloc(size);
-    // Read the file to a buffer
-    if (fread(buf, 1, size, fd) != size) {
-        err(-3, "opening %s for deserialization", dump_name);
-    }
-    fclose(fd);
-    // Parse the JSON
-    JSONValue devs_json = json_parse_value_len(buf, size);
-    if (json_is_error(devs_json)) {
-        vm_error("JSON err: %s\n", json_get_error(devs_json));
-        json_free(devs_json);
-        err(-3, "Parsing %s as JSON", dump_name);
-    }
-    // Pass the config to the PLIC
-    JSONValue dev_cfg = json_object_get(devs_json, "plic");
-    deserialize_plic(m, dev_cfg);
-    // Pass the relevant config to each virtio device
-    for (int i = 0; i < m->virtio_count; ++i) {
-        char dev_name[5];
-        snprintf(dev_name, 5, "vio%d", i);
-        dev_cfg = json_object_get(devs_json, dev_name);
-        virtio_device_deserialize(m->virtio_devices[i], dev_cfg);
-    }
-    json_free(devs_json);
-    free(buf);
 }
 
 void virt_machine_deserialize(RISCVMachine *m, const char *dump_name) {
-    RISCVCPUState *s = m->cpu_state[0];  // FIXME: MULTICORE
+    /* Deserialize core states. */
+    RISCVCPUState *s = m->cpu_state[0];
 
-    assert(m->ncpus == 1);  // FIXME: riscv_cpu_serialize must be patched for multicore
+    /* Append core number suffix to the file name. */
     riscv_cpu_deserialize(s, dump_name);
-    deserialize_devices(m, dump_name);
+
+    /* Deserialize memory. */
+    riscv_ram_deserialize(m->cpu_state[0], dump_name);
 }
 
 int virt_machine_get_sleep_duration(RISCVMachine *m, int hartid, int ms_delay) {
@@ -1567,6 +1582,8 @@ int virt_machine_get_sleep_duration(RISCVMachine *m, int hartid, int ms_delay) {
 
     return ms_delay;
 }
+
+uint64_t virt_machine_read_u8(RISCVMachine *s, int hartid, uint64_t addr) { return riscv_read_u8(s->cpu_state[hartid], addr); }
 
 uint64_t virt_machine_get_pc(RISCVMachine *s, int hartid) { return riscv_get_pc(s->cpu_state[hartid]); }
 

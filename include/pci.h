@@ -70,13 +70,13 @@ typedef struct PCIDevice PCIDevice;
 
 typedef void PCIBarSetFunc(void *opaque, int bar_num, uint32_t addr, BOOL enabled);
 
-PCIDevice *    pci_register_device(PCIBus *b, const char *name, int devfn, uint16_t vendor_id, uint16_t device_id, uint8_t revision,
+PCIDevice     *pci_register_device(PCIBus *b, const char *name, int devfn, uint16_t vendor_id, uint16_t device_id, uint8_t revision,
                                    uint16_t class_id);
 PhysMemoryMap *pci_device_get_mem_map(PCIDevice *d);
 PhysMemoryMap *pci_device_get_port_map(PCIDevice *d);
 void           pci_register_bar(PCIDevice *d, unsigned int bar_num, uint32_t size, int type, void *opaque, PCIBarSetFunc *bar_set);
-IRQSignal *    pci_device_get_irq(PCIDevice *d, unsigned int irq_num);
-uint8_t *      pci_device_get_dma_ptr(PCIDevice *d, uint64_t addr);
+IRQSignal     *pci_device_get_irq(PCIDevice *d, unsigned int irq_num);
+uint8_t       *pci_device_get_dma_ptr(PCIDevice *d, uint64_t addr);
 void           pci_device_set_config8(PCIDevice *d, uint8_t addr, uint8_t val);
 void           pci_device_set_config16(PCIDevice *d, uint8_t addr, uint16_t val);
 int            pci_device_get_devfn(PCIDevice *d);

@@ -39,6 +39,8 @@ cmake_minimum_required(VERSION 3.5)
 # THE SOFTWARE.
 #
 
+cmake_minimum_required(VERSION 2.9)
+
 set(CMAKE_CXX_STANDARD 11)
 project(dromajo)
 option(TRACEOS "TRACEOS" OFF)
@@ -86,6 +88,12 @@ if (SIMPOINT)
     )
 endif ()
 
+# externak package dependencies
+SET(CMAKE_MODULE_PATH "${dromajo_SOURCE_DIR}/cmake")
+if (${CMAKE_HOST_APPLE})
+    FIND_PACKAGE(LibElf REQUIRED)
+endif ()
+
 # Set Version Header
 set(CONFIG_VERSION "Dromajo-0.1")
 configure_file(include/config.h.in config.h @ONLY)
@@ -120,6 +128,7 @@ add_library(dromajo_cosim STATIC
         src/iomem.cpp
         src/dw_apb_uart.cpp
         src/json.cpp
+        src/gdb_stub.cpp
         src/machine.cpp
         src/elf64.cpp
         src/LiveCache.cpp
@@ -145,8 +154,9 @@ else ()
 endif ()
 
 if (${CMAKE_HOST_APPLE})
-    include_directories(/usr/local/include /usr/local/include/libelf /opt/homebrew/include /opt/homebrew/include/libelf)
-    target_link_libraries(dromajo_cosim -L/usr/local/lib -L/opt/homebrew/lib -lelf)
+    include_directories(${LIBELF_INCLUDE_DIRS})
+    target_link_libraries(dromajo       ${LIBELF_LIBRARIES})
+    target_link_libraries(dromajo_cosim ${LIBELF_LIBRARIES})
 else ()
     # add librt for Linux
     target_link_libraries(dromajo_cosim rt)

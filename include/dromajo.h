@@ -21,6 +21,8 @@
 #include "config.h"
 #include "riscv_machine.h"
 
+void gdb_stub(RISCVMachine *m, int tcp_port);
+
 extern FILE *dromajo_stdout;
 extern FILE *dromajo_stderr;
 

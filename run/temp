@@ -1,0 +1,24 @@
+
+
+
+benchmarks=("gcc" "astar" "bzip2" "gobmk" "h264ref" "hmmer" "libquantum" "omnetpp" "perlbench" "sjeng" "xalanc")
+
+old_benchmark="xalanc"
+
+for benchmark in ${benchmarks[@]}; do
+  echo "********************************************** $benchmark ********************************************"
+  sed -i 's/$old_benchmark/$benchmark/g' boot.cfg
+  
+  make -j16 -C buildroot
+  cp buildroot/output/images/rootfs.cpio .
+  
+  ../build/dromajo --simpoint simpoint_data/spec06_$benchmark/simpoints ./boot.cfg
+  
+  ../build/dromajo --save sp01 --maxinsn 1000000 ./boot.cfg
+  
+  mv sp* simpoint_data/spec06_$benchmark/
+  
+  rm -rf dromajo_simpoint.bb
+  		
+  $old_benchmark=$benchmark
+done

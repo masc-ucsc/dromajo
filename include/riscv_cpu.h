@@ -44,9 +44,14 @@
 
 #include "riscv.h"
 
-#define ROM_SIZE       0x00002000
+typedef struct RISCVCPUState RISCVCPUState;
+
+// 4K per core context + 4K for FDT context
+// ROM_SIZE >= ncpus * 4K + 4K
+#define ROM_SIZE       0x00009000
+#define ROM_CODE_SIZE  0x00000B00
 #define ROM_BASE_ADDR  0x00010000
-#define BOOT_BASE_ADDR 0x00010000
+#define BOOT_BASE_ADDR 0x00010040
 
 // The default RAM base, can be relocated with config "memory_base_addr"
 #define RAM_BASE_ADDR 0x80000000
@@ -57,13 +62,19 @@
 #define FLEN 64
 #endif /* !FLEN */
 
+typedef struct mem_loc_t {
+    uint64_t diff;
+    bool     is_ram;
+    int      act_loc;
+} mem_loc_var;
+
 #define DUMP_INVALID_MEM_ACCESS
 #define DUMP_MMU_EXCEPTIONS
-//#define DUMP_INTERRUPTS
+// #define DUMP_INTERRUPTS
 #define DUMP_INVALID_CSR
-//#define DUMP_ILLEGAL_INSTRUCTION
-//#define DUMP_EXCEPTIONS
-//#define DUMP_CSR
+// #define DUMP_ILLEGAL_INSTRUCTION
+// #define DUMP_EXCEPTIONS
+// #define DUMP_CSR
 #define CONFIG_LOGFILE
 #define CONFIG_SW_MANAGED_A_AND_D      1
 #define CONFIG_ALLOW_MISALIGNED_ACCESS 0
@@ -103,13 +114,13 @@ typedef uint128_t fp_uint;
 #define ELEN_DEFAULT (1 << 6)
 #define VLEN_DEFAULT (1 << 7)
 /* Modify these lines to fit architectural params */
-//#define VLEN <size_in_bits_here>
-//#define ELEN <typically_default_but_might_be_rattified>
+// #define VLEN <size_in_bits_here>
+// #define ELEN <typically_default_but_might_be_rattified>
 /* Uncomment the next line to DISABLE Vector Simulation "V-extension" */
-//#define VLEN 0
+// #define VLEN 0
 /* Uncomment the next line to have masked elements under mask-agnotic policy be filled with 1's
  * useful for vector register renaming, where masked elements dont need to be copied */
-//#define MASK_AGNOSTIC_FILL 1
+// #define MASK_AGNOSTIC_FILL 1
 #ifndef VLEN
 #define VLEN VLEN_DEFAULT
 #endif
@@ -342,6 +353,7 @@ uint32_t       riscv_cpu_get_misa(RISCVCPUState *s);
 void           riscv_cpu_flush_tlb_write_range_ram(RISCVCPUState *s, uint8_t *ram_ptr, size_t ram_size);
 void           riscv_set_pc(RISCVCPUState *s, uint64_t pc);
 uint64_t       riscv_get_pc(RISCVCPUState *s);
+uint64_t       riscv_read_u8(RISCVCPUState *s, uint64_t pc);
 uint64_t       riscv_get_reg(RISCVCPUState *s, int rn);
 uint64_t       riscv_get_reg_previous(RISCVCPUState *s, int rn);
 uint64_t       riscv_get_fpreg(RISCVCPUState *s, int rn);
@@ -363,7 +375,12 @@ void riscv_set_debug_mode(RISCVCPUState *s, bool on);
 int riscv_benchmark_exit_code(RISCVCPUState *s);
 
 #include "riscv_machine.h"
+void generate_core_boot_rom(uint32_t *rom, uint32_t rom_size, uint32_t code_pos, uint32_t data_pos, RISCVCPUState *s,
+                            const uint64_t clint_base_addr);
+void create_boot_rom_image(uint32_t *rom, uint32_t rom_size_bytes, const char *file_name);
+void riscv_ram_serialize(RISCVCPUState *s, const char *dump_name);
 void riscv_cpu_serialize(RISCVCPUState *s, const char *dump_name, const uint64_t clint_base_addr);
+void riscv_ram_deserialize(RISCVCPUState *s, const char *dump_name);
 void riscv_cpu_deserialize(RISCVCPUState *s, const char *dump_name);
 
 int riscv_cpu_read_memory(RISCVCPUState *s, mem_uint_t *pval, target_ulong addr, int size_log2);
